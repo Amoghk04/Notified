@@ -14,8 +14,11 @@ public class NotificationChannelService {
 
     private static final Logger logger = LoggerFactory.getLogger(NotificationChannelService.class);
 
-    @Autowired(required = false)
-    private JavaMailSender mailSender;
+    private final JavaMailSender mailSender;
+
+    public NotificationChannelService(@Autowired(required = false) JavaMailSender mailSender) {
+        this.mailSender = mailSender;
+    }
 
     public void sendEmailNotification(UserPreference preference, Notification notification) {
         if (preference.getEmail() != null && !preference.getEmail().isEmpty()) {
