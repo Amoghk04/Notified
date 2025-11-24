@@ -3,7 +3,6 @@ package com.notified.notification.controller;
 import com.notified.notification.model.Notification;
 import com.notified.notification.service.NotificationService;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

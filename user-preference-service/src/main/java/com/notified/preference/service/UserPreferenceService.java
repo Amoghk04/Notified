@@ -2,7 +2,6 @@ package com.notified.preference.service;
 
 import com.notified.preference.model.UserPreference;
 import com.notified.preference.repository.UserPreferenceRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
