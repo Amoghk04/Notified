@@ -24,6 +24,10 @@ Client → API Gateway → [User Preference Service | Notification Service]
 
 ## Prerequisites
 
+### Option 1: Docker (Recommended)
+- Docker and Docker Compose installed
+
+### Option 2: Local Development
 - Java 17 or higher
 - Maven 3.6+
 - MongoDB (running on localhost:27017)
@@ -31,20 +35,76 @@ Client → API Gateway → [User Preference Service | Notification Service]
 
 ## Getting Started
 
-### 1. Clone the Repository
+### Option 1: Using Docker Compose (Recommended)
+
+#### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/Amoghk04/Notified.git
 cd Notified
 ```
 
-### 2. Build the Project
+#### 2. Start All Services with Docker Compose
+
+```bash
+# Build and start all services
+docker-compose up --build
+
+# Or run in detached mode
+docker-compose up -d --build
+```
+
+This will start:
+- MongoDB (port 27017)
+- Eureka Server (port 8761)
+- API Gateway (port 8080)
+- User Preference Service (port 8081)
+- Notification Service (port 8082)
+
+#### 3. Verify Services
+
+Check that all services are running:
+```bash
+docker-compose ps
+```
+
+Access Eureka Dashboard:
+```bash
+open http://localhost:8761
+```
+
+#### 4. Test the System
+
+Run the automated test script:
+```bash
+./test-api.sh
+```
+
+#### 5. Stop Services
+
+```bash
+docker-compose down
+
+# To remove volumes as well
+docker-compose down -v
+```
+
+### Option 2: Local Development Setup
+
+#### 1. Clone the Repository
+
+```bash
+git clone https://github.com/Amoghk04/Notified.git
+cd Notified
+```
+
+#### 2. Build the Project
 
 ```bash
 mvn clean install
 ```
 
-### 3. Start MongoDB
+#### 3. Start MongoDB
 
 Ensure MongoDB is running on localhost:27017:
 
@@ -180,6 +240,14 @@ DELETE http://localhost:8080/api/notifications/{id}
 
 To enable email notifications, set the following environment variables:
 
+**For Docker Compose:**
+Create a `.env` file in the root directory:
+```bash
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+```
+
+**For Local Development:**
 ```bash
 export MAIL_USERNAME=your-email@gmail.com
 export MAIL_PASSWORD=your-app-password
@@ -193,6 +261,8 @@ spring:
     username: your-email@gmail.com
     password: your-app-password
 ```
+
+**Note:** For Gmail, you need to use an "App Password" rather than your regular password. Generate one at: https://myaccount.google.com/apppasswords
 
 ### MongoDB Configuration
 
@@ -245,6 +315,21 @@ Notified/
 
 ## Testing
 
+### Automated Testing
+
+Use the provided test script:
+```bash
+./test-api.sh
+```
+
+This script will:
+- Create multiple user preferences with different channel settings
+- Send notifications to test users
+- Update preferences and verify changes
+- Display all data from the system
+
+### Manual Testing
+
 The system can be tested using curl, Postman, or any HTTP client:
 
 ```bash
@@ -262,6 +347,95 @@ curl -X POST http://localhost:8080/api/notifications \
 curl http://localhost:8080/api/notifications/user/user123
 ```
 
+### Viewing Logs
+
+**Docker Compose:**
+```bash
+# View all logs
+docker-compose logs -f
+
+# View specific service logs
+docker-compose logs -f notification-service
+docker-compose logs -f user-preference-service
+```
+
+**Local Development:**
+Check the console output of each service.
+
+## Key Features
+
+### 🎯 Decoupled Architecture
+- Independent microservices with clear responsibilities
+- Services can be developed, deployed, and scaled independently
+- Easy to maintain and update individual components
+
+### 🔄 Service Discovery
+- Automatic service registration with Eureka
+- Dynamic service lookup
+- No hardcoded service URLs
+
+### 🚪 Centralized API Gateway
+- Single entry point for all client requests
+- Request routing based on paths
+- Load balancing across service instances
+
+### 💾 Separate Data Stores
+- Each service has its own MongoDB database
+- Data isolation and independence
+- Optimized data models per service
+
+### 📢 Multi-Channel Notification Support
+- Email notifications (via SMTP)
+- SMS notifications (extensible with Twilio/AWS SNS)
+- App push notifications (extensible with FCM)
+
+### ⚙️ Personalized Preferences
+- User-specific notification settings
+- Channel-level preferences (enable/disable)
+- Easy preference management via REST API
+
+### 📈 Scalable Design
+- Horizontal scaling of individual services
+- Stateless services for easy replication
+- MongoDB for high-volume data storage
+
+### 🔌 Easy Extension
+- Add new notification channels without modifying existing code
+- Plug in new services easily
+- Well-defined service contracts
+
+## Benefits
+
+1. **Maintainability**: Each service is focused on a single responsibility
+2. **Scalability**: Scale services independently based on load
+3. **Resilience**: Failure of one service doesn't bring down the entire system
+4. **Technology Flexibility**: Different services can use different technologies if needed
+5. **Team Autonomy**: Different teams can work on different services independently
+6. **Easy Testing**: Services can be tested in isolation
+7. **Deployment Flexibility**: Deploy services independently with zero downtime
+
+## Troubleshooting
+
+### Services Not Registering with Eureka
+- Ensure Eureka Server is running and accessible
+- Check that `eureka.client.service-url.defaultZone` is correctly configured
+- Wait 30-60 seconds for services to register after startup
+
+### MongoDB Connection Issues
+- Verify MongoDB is running: `docker ps` or `mongosh`
+- Check MongoDB connection strings in application.yml files
+- Ensure ports are not blocked by firewall
+
+### Email Not Sending
+- Verify MAIL_USERNAME and MAIL_PASSWORD are set correctly
+- For Gmail, use App Password, not regular password
+- Check notification-service logs for SMTP errors
+
+### API Gateway Not Routing Requests
+- Verify all services are registered in Eureka (check http://localhost:8761)
+- Check API Gateway logs for routing errors
+- Ensure correct path prefixes (/api/preferences, /api/notifications)
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
@@ -269,3 +443,10 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Support
+
+For issues and questions:
+- Open an issue on GitHub
+- Check the documentation
+- Review the logs for detailed error messages
