@@ -72,9 +72,7 @@ curl -X POST http://localhost:8080/api/preferences \
     "userId": "john_doe",
     "email": "john@example.com",
     "phoneNumber": "+1234567890",
-    "emailEnabled": true,
-    "smsEnabled": false,
-    "appEnabled": true
+    "enabledChannels": ["EMAIL", "APP"]
   }'
 ```
 
@@ -103,9 +101,8 @@ curl -X PUT http://localhost:8080/api/preferences/john_doe \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john@example.com",
-    "emailEnabled": false,
-    "smsEnabled": true,
-    "appEnabled": true
+    "phoneNumber": "+1234567890",
+    "enabledChannels": ["SMS", "APP"]
   }'
 ```
 

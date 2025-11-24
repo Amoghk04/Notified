@@ -5,6 +5,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
+import java.util.HashSet;
 import java.util.Set;
 
 @Document(collection = "user_preferences")
@@ -21,11 +22,7 @@ public class UserPreference {
 
     private String phoneNumber;
 
-    private Set<NotificationChannel> enabledChannels;
-
-    private boolean emailEnabled = true;
-    private boolean smsEnabled = false;
-    private boolean appEnabled = true;
+    private Set<NotificationChannel> enabledChannels = new HashSet<>();
 
     public enum NotificationChannel {
         EMAIL, SMS, APP
@@ -83,26 +80,14 @@ public class UserPreference {
     }
 
     public boolean isEmailEnabled() {
-        return emailEnabled;
-    }
-
-    public void setEmailEnabled(boolean emailEnabled) {
-        this.emailEnabled = emailEnabled;
+        return enabledChannels != null && enabledChannels.contains(NotificationChannel.EMAIL);
     }
 
     public boolean isSmsEnabled() {
-        return smsEnabled;
-    }
-
-    public void setSmsEnabled(boolean smsEnabled) {
-        this.smsEnabled = smsEnabled;
+        return enabledChannels != null && enabledChannels.contains(NotificationChannel.SMS);
     }
 
     public boolean isAppEnabled() {
-        return appEnabled;
-    }
-
-    public void setAppEnabled(boolean appEnabled) {
-        this.appEnabled = appEnabled;
+        return enabledChannels != null && enabledChannels.contains(NotificationChannel.APP);
     }
 }

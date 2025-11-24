@@ -22,9 +22,7 @@ curl -X POST "${API_BASE_URL}/preferences" \
     "userId": "user123",
     "email": "user123@example.com",
     "phoneNumber": "+1234567890",
-    "emailEnabled": true,
-    "smsEnabled": true,
-    "appEnabled": true
+    "enabledChannels": ["EMAIL", "SMS", "APP"]
   }' | jq '.'
 echo ""
 echo ""
@@ -61,9 +59,7 @@ curl -X POST "${API_BASE_URL}/preferences" \
     "userId": "user456",
     "email": "user456@example.com",
     "phoneNumber": "+9876543210",
-    "emailEnabled": true,
-    "smsEnabled": false,
-    "appEnabled": false
+    "enabledChannels": ["EMAIL"]
   }' | jq '.'
 echo ""
 echo ""
@@ -99,9 +95,7 @@ curl -X PUT "${API_BASE_URL}/preferences/user123" \
   -d '{
     "email": "user123@example.com",
     "phoneNumber": "+1234567890",
-    "emailEnabled": true,
-    "smsEnabled": false,
-    "appEnabled": true
+    "enabledChannels": ["EMAIL", "APP"]
   }' | jq '.'
 echo ""
 echo ""

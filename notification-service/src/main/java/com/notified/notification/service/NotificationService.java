@@ -18,14 +18,17 @@ public class NotificationService {
 
     private static final Logger logger = LoggerFactory.getLogger(NotificationService.class);
 
-    @Autowired
-    private NotificationRepository repository;
+    private final NotificationRepository repository;
+    private final UserPreferenceClient preferenceClient;
+    private final NotificationChannelService channelService;
 
-    @Autowired
-    private UserPreferenceClient preferenceClient;
-
-    @Autowired
-    private NotificationChannelService channelService;
+    public NotificationService(NotificationRepository repository, 
+                              UserPreferenceClient preferenceClient,
+                              NotificationChannelService channelService) {
+        this.repository = repository;
+        this.preferenceClient = preferenceClient;
+        this.channelService = channelService;
+    }
 
     public List<Notification> getAllNotifications() {
         return repository.findAll();

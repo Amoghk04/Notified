@@ -44,14 +44,21 @@ git clone https://github.com/Amoghk04/Notified.git
 cd Notified
 ```
 
-#### 2. Start All Services with Docker Compose
+#### 2. Build the Project
 
 ```bash
-# Build and start all services
-docker-compose up --build
+# Build all services with Maven
+mvn clean package -DskipTests
+```
+
+#### 3. Start All Services with Docker Compose
+
+```bash
+# Start all services
+docker-compose up
 
 # Or run in detached mode
-docker-compose up -d --build
+docker-compose up -d
 ```
 
 This will start:
@@ -61,7 +68,7 @@ This will start:
 - User Preference Service (port 8081)
 - Notification Service (port 8082)
 
-#### 3. Verify Services
+#### 4. Verify Services
 
 Check that all services are running:
 ```bash
@@ -73,14 +80,14 @@ Access Eureka Dashboard:
 open http://localhost:8761
 ```
 
-#### 4. Test the System
+#### 5. Test the System
 
 Run the automated test script:
 ```bash
 ./test-api.sh
 ```
 
-#### 5. Stop Services
+#### 6. Stop Services
 
 ```bash
 docker-compose down
@@ -173,9 +180,7 @@ Content-Type: application/json
   "userId": "user123",
   "email": "user@example.com",
   "phoneNumber": "+1234567890",
-  "emailEnabled": true,
-  "smsEnabled": false,
-  "appEnabled": true
+  "enabledChannels": ["EMAIL", "APP"]
 }
 ```
 
@@ -186,9 +191,8 @@ Content-Type: application/json
 
 {
   "email": "newemail@example.com",
-  "emailEnabled": true,
-  "smsEnabled": true,
-  "appEnabled": true
+  "phoneNumber": "+1234567890",
+  "enabledChannels": ["EMAIL", "SMS", "APP"]
 }
 ```
 
@@ -336,7 +340,7 @@ The system can be tested using curl, Postman, or any HTTP client:
 # 1. Create a user preference
 curl -X POST http://localhost:8080/api/preferences \
   -H "Content-Type: application/json" \
-  -d '{"userId":"user123","email":"user@example.com","emailEnabled":true}'
+  -d '{"userId":"user123","email":"user@example.com","enabledChannels":["EMAIL","APP"]}'
 
 # 2. Send a notification
 curl -X POST http://localhost:8080/api/notifications \

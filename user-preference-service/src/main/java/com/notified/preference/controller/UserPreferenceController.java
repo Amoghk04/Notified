@@ -14,8 +14,11 @@ import java.util.List;
 @RequestMapping("/preferences")
 public class UserPreferenceController {
 
-    @Autowired
-    private UserPreferenceService service;
+    private final UserPreferenceService service;
+
+    public UserPreferenceController(UserPreferenceService service) {
+        this.service = service;
+    }
 
     @GetMapping
     public ResponseEntity<List<UserPreference>> getAllPreferences() {

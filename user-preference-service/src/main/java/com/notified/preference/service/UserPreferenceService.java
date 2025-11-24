@@ -11,8 +11,11 @@ import java.util.Optional;
 @Service
 public class UserPreferenceService {
 
-    @Autowired
-    private UserPreferenceRepository repository;
+    private final UserPreferenceRepository repository;
+
+    public UserPreferenceService(UserPreferenceRepository repository) {
+        this.repository = repository;
+    }
 
     public List<UserPreference> getAllPreferences() {
         return repository.findAll();
@@ -33,9 +36,6 @@ public class UserPreferenceService {
             existingPref.setEmail(preference.getEmail());
             existingPref.setPhoneNumber(preference.getPhoneNumber());
             existingPref.setEnabledChannels(preference.getEnabledChannels());
-            existingPref.setEmailEnabled(preference.isEmailEnabled());
-            existingPref.setSmsEnabled(preference.isSmsEnabled());
-            existingPref.setAppEnabled(preference.isAppEnabled());
             return repository.save(existingPref);
         } else {
             preference.setUserId(userId);
