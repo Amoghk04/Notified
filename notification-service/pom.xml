@@ -14,7 +14,7 @@
     <artifactId>notification-service</artifactId>
     <version>1.0.0</version>
     <name>Notification Service</name>
-    <description>Service for sending notifications via email, SMS, and app</description>
+    <description>Service for sending notifications via email, WhatsApp, and app</description>
 
     <dependencies>
         <dependency>
@@ -40,6 +40,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        <!-- Twilio SDK for WhatsApp messaging -->
+        <dependency>
+            <groupId>com.twilio.sdk</groupId>
+            <artifactId>twilio</artifactId>
+            <version>10.9.2</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

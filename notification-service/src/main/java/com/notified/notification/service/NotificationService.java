@@ -50,17 +50,34 @@ public class NotificationService {
             
             // Send via enabled channels based on preferences
             if (preference.isEmailEnabled()) {
-                channelService.sendEmailNotification(preference, notification);
+                try {
+                    channelService.sendEmailNotification(preference, notification);
+                } catch (Exception ex) {
+                    logger.warn("Email channel failed for userId={} notificationId={} error={}", notification.getUserId(), notification.getId(), ex.getMessage());
+                }
             }
             
-            if (preference.isSmsEnabled()) {
-                channelService.sendSmsNotification(preference, notification);
+            if (preference.isWhatsappEnabled()) {
+                try {
+                    channelService.sendWhatsappNotification(preference, notification);
+                } catch (Exception ex) {
+                    logger.warn("WhatsApp channel failed for userId={} notificationId={} error={}", notification.getUserId(), notification.getId(), ex.getMessage());
+                }
             }
             
             if (preference.isAppEnabled()) {
                 channelService.sendAppNotification(preference, notification);
             }
             
+            // Populate channels from preference (reflect attempted channels) with enum translation
+            if (preference.getEnabledChannels() != null) {
+                java.util.Set<com.notified.notification.model.Notification.NotificationChannel> channels =
+                        preference.getEnabledChannels().stream()
+                                .map(c -> com.notified.notification.model.Notification.NotificationChannel.valueOf(c.name()))
+                                .collect(java.util.stream.Collectors.toSet());
+                notification.setChannels(channels);
+            }
+
             // Update notification status
             notification.setStatus(Notification.NotificationStatus.SENT);
             notification.setSentAt(LocalDateTime.now());

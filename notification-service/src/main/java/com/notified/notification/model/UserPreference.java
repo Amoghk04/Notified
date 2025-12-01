@@ -9,9 +9,10 @@ public class UserPreference {
     private String email;
     private String phoneNumber;
     private Set<NotificationChannel> enabledChannels;
+    private String preference;
 
     public enum NotificationChannel {
-        EMAIL, SMS, APP
+        EMAIL, WHATSAPP, APP, SMS
     }
 
     // Getters and Setters
@@ -55,12 +56,20 @@ public class UserPreference {
         this.enabledChannels = enabledChannels;
     }
 
+    public String getPreference() {
+        return preference;
+    }
+
+    public void setPreference(String preference) {
+        this.preference = preference;
+    }
+
     public boolean isEmailEnabled() {
         return enabledChannels != null && enabledChannels.contains(NotificationChannel.EMAIL);
     }
 
-    public boolean isSmsEnabled() {
-        return enabledChannels != null && enabledChannels.contains(NotificationChannel.SMS);
+    public boolean isWhatsappEnabled() {
+        return enabledChannels != null && enabledChannels.contains(NotificationChannel.WHATSAPP);
     }
 
     public boolean isAppEnabled() {

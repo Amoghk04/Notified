@@ -12,7 +12,7 @@ The system consists of four main microservices:
 1. **Eureka Server** (Port 8761) - Service Discovery
 2. **API Gateway** (Port 8080) - Request Routing
 3. **User Preference Service** (Port 8081) - Manages user notification preferences
-4. **Notification Service** (Port 8082) - Sends notifications via email/SMS/app
+4. **Notification Service** (Port 8082) - Sends notifications via email/WhatsApp/app
 
 ### Architecture Flow
 
@@ -47,7 +47,69 @@ cd Notified
 #### 2. Build the Project
 
 ```bash
+
+## Quick Run Cheatsheet
+
+```bash
+# 1. Build all modules
+mvn clean package -DskipTests
+
+# 2. (Option A) Run everything with Docker Compose
+docker compose up -d --build
+
+# 2. (Option B) Run locally without Docker
+# Start MongoDB (if not already running)
 # Build all services with Maven
+
+# Start Eureka (wait until http://localhost:8761 is reachable)
+(cd eureka-server && mvn spring-boot:run)
+
+# In new terminals (order after Eureka starts)
+(cd api-gateway && mvn spring-boot:run)
+(cd user-preference-service && mvn spring-boot:run)
+MAIL_USERNAME=your-email@gmail.com MAIL_PASSWORD=your-app-password \
+  (cd notification-service && mvn spring-boot:run)
+
+# Verify registration
+open http://localhost:8761 || xdg-open http://localhost:8761 2>/dev/null || echo "Open http://localhost:8761"
+
+# Test endpoints via gateway
+curl http://localhost:8080/api/preferences
+```
+
+## Module Summary
+
+| Module | Port | Purpose | Key Dependencies |
+|--------|------|---------|------------------|
+| eureka-server | 8761 | Service discovery registry | spring-cloud-starter-netflix-eureka-server |
+| api-gateway | 8080 | Single entry / routing / LB | spring-cloud-starter-gateway, eureka client |
+| user-preference-service | 8081 | Manage user notification preferences | web, data-mongodb, validation, eureka client |
+| notification-service | 8082 | Send and persist notifications (multi-channel) | web, data-mongodb, openfeign, mail, validation, eureka client |
+
+Environment variables (runtime configurable):
+- `MAIL_USERNAME` / `MAIL_PASSWORD`: SMTP credentials for email channel (notification-service)
+- `SPRING_DATA_MONGODB_HOST`: Overridden in Docker to point services to `mongodb`
+- `EUREKA_CLIENT_SERVICEURL_DEFAULTZONE`: Set in containers to internal Eureka URL
+
+## Additional Endpoints (Beyond Prior List)
+
+Notification Service also exposes:
+
+```bash
+GET /api/notifications/{id}        # Fetch single notification by ID (through gateway)
+```
+
+Internally, the Notification Service uses an OpenFeign client:
+
+```java
+@FeignClient(name = "user-preference-service")
+interface UserPreferenceClient {
+    @GetMapping("/preferences/{userId}")
+    UserPreference getUserPreference(@PathVariable("userId") String userId);
+}
+```
+
+This call is resolved via Eureka service discovery and load-balanced automatically.
 mvn clean package -DskipTests
 ```
 
@@ -213,6 +275,11 @@ GET http://localhost:8080/api/notifications
 GET http://localhost:8080/api/notifications/user/{userId}
 ```
 
+#### Get notification by ID
+```bash
+GET http://localhost:8080/api/notifications/{id}
+```
+
 #### Send notification
 ```bash
 POST http://localhost:8080/api/notifications
@@ -264,9 +331,17 @@ spring:
   mail:
     username: your-email@gmail.com
     password: your-app-password
+    properties:
+      mail:
+        smtp:
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 ```
 
 **Note:** For Gmail, you need to use an "App Password" rather than your regular password. Generate one at: https://myaccount.google.com/apppasswords
+
+**Service Behavior Update:** Email sending now fails fast when the mail subsystem is misconfigured (no silent fallback). SMTP timeouts added to reduce request blocking.
 
 ### MongoDB Configuration
 
@@ -282,9 +357,23 @@ To change, update the respective `application.yml` files.
 
 The system is designed to be easily extended:
 
+### WhatsApp Channel Integration
+
+To enable WhatsApp notifications via Twilio:
+1. Sign up for Twilio and enable the WhatsApp sandbox (or production approval).
+2. Obtain `Account SID`, `Auth Token`, and a WhatsApp-enabled from number (e.g. `whatsapp:+14155238886`).
+3. Set environment variables before starting `notification-service`:
+  ```bash
+  export TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  export TWILIO_AUTH_TOKEN=your_auth_token
+  export TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+  ```
+4. Ensure user preferences include `"WHATSAPP"` in `enabledChannels` and a `phoneNumber` (E.164 format, e.g. `+1234567890`).
+5. Send notifications normally; if credentials are missing the service logs a simulated send.
+
 ### Adding New Notification Channels
 
-1. Add new channel enum to `NotificationChannel`
+1. Add new channel enum to `NotificationChannel` (both preference and notification models)
 2. Implement the channel logic in `NotificationChannelService`
 3. Update user preferences to include the new channel
 
@@ -390,7 +479,7 @@ Check the console output of each service.
 
 ### 📢 Multi-Channel Notification Support
 - Email notifications (via SMTP)
-- SMS notifications (extensible with Twilio/AWS SNS)
+- WhatsApp notifications (via Twilio API)
 - App push notifications (extensible with FCM)
 
 ### ⚙️ Personalized Preferences

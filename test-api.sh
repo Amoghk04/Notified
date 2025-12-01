@@ -15,14 +15,15 @@ echo "Waiting for services to be ready..."
 sleep 5
 
 # Test 1: Create a user preference
-echo "1. Creating user preference for user123..."
+echo "1. Creating user preference for user123 (EMAIL, WHATSAPP, APP)..."
 curl -X POST "${API_BASE_URL}/preferences" \
   -H "Content-Type: application/json" \
   -d '{
     "userId": "user123",
-    "email": "user123@example.com",
-    "phoneNumber": "+1234567890",
-    "enabledChannels": ["EMAIL", "SMS", "APP"]
+    "email": "adityakl1509@gmail.com",
+    "phoneNumber": "+919148053287",
+    "preference": "Barca",
+    "enabledChannels": ["EMAIL", "WHATSAPP", "APP"]
   }' | jq '.'
 echo ""
 echo ""
@@ -52,14 +53,15 @@ echo ""
 echo ""
 
 # Test 5: Create another user preference with different channels
-echo "5. Creating user preference for user456 (email only)..."
+echo "5. Creating user preference for user456 (EMAIL, WHATSAPP)..."
 curl -X POST "${API_BASE_URL}/preferences" \
   -H "Content-Type: application/json" \
   -d '{
     "userId": "user456",
-    "email": "user456@example.com",
+    "email": "kalasapuraamogh@gmail.com",
     "phoneNumber": "+9876543210",
-    "enabledChannels": ["EMAIL"]
+    "preference": "Mia",
+    "enabledChannels": ["EMAIL", "WHATSAPP"]
   }' | jq '.'
 echo ""
 echo ""
@@ -89,7 +91,7 @@ echo ""
 echo ""
 
 # Test 9: Update user preference
-echo "9. Updating user123 preference (disable SMS)..."
+echo "9. Updating user123 preference (remove WHATSAPP, keep EMAIL, APP)..."
 curl -X PUT "${API_BASE_URL}/preferences/user123" \
   -H "Content-Type: application/json" \
   -d '{
@@ -107,7 +109,7 @@ curl -X POST "${API_BASE_URL}/notifications" \
   -d '{
     "userId": "user123",
     "subject": "Updated Preferences Test",
-    "message": "This notification should not be sent via SMS anymore."
+    "message": "This notification should not be sent via WHATSAPP anymore."
   }' | jq '.'
 echo ""
 echo ""

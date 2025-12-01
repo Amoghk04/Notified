@@ -5,7 +5,9 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Document(collection = "user_preferences")
@@ -22,20 +24,25 @@ public class UserPreference {
 
     private String phoneNumber;
 
+    private String preference;
+
+    private List<String> preferences = new ArrayList<>();
+
     private Set<NotificationChannel> enabledChannels = new HashSet<>();
 
     public enum NotificationChannel {
-        EMAIL, SMS, APP
+        EMAIL, WHATSAPP, APP, SMS
     }
 
     // Constructors
     public UserPreference() {
     }
 
-    public UserPreference(String userId, String email, String phoneNumber) {
+    public UserPreference(String userId, String email, String phoneNumber, String preference) {
         this.userId = userId;
         this.email = email;
         this.phoneNumber = phoneNumber;
+        this.preference = preference;
     }
 
     // Getters and Setters
@@ -83,8 +90,24 @@ public class UserPreference {
         return enabledChannels != null && enabledChannels.contains(NotificationChannel.EMAIL);
     }
 
-    public boolean isSmsEnabled() {
-        return enabledChannels != null && enabledChannels.contains(NotificationChannel.SMS);
+    public boolean isWhatsappEnabled() {
+        return enabledChannels != null && enabledChannels.contains(NotificationChannel.WHATSAPP);
+    }
+
+    public String getPreference() {
+        return preference;
+    }
+
+    public void setPreference(String preference) {
+        this.preference = preference;
+    }
+
+    public List<String> getPreferences() {
+        return preferences;
+    }
+
+    public void setPreferences(List<String> preferences) {
+        this.preferences = preferences;
     }
 
     public boolean isAppEnabled() {
