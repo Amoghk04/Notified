@@ -65,6 +65,14 @@ public class NotificationService {
                 }
             }
             
+            if (preference.isTelegramEnabled()) {
+                try {
+                    channelService.sendTelegramNotification(preference, notification);
+                } catch (Exception ex) {
+                    logger.warn("Telegram channel failed for userId={} notificationId={} error={}", notification.getUserId(), notification.getId(), ex.getMessage());
+                }
+            }
+
             if (preference.isAppEnabled()) {
                 channelService.sendAppNotification(preference, notification);
             }

@@ -34,6 +34,7 @@ public class UserPreferenceService {
             UserPreference existingPref = existing.get();
             existingPref.setEmail(preference.getEmail());
             existingPref.setPhoneNumber(preference.getPhoneNumber());
+            existingPref.setTelegramChatId(preference.getTelegramChatId());
             existingPref.setEnabledChannels(preference.getEnabledChannels());
             return repository.save(existingPref);
         } else {

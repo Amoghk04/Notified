@@ -11,6 +11,11 @@ import com.twilio.Twilio;
 import com.twilio.rest.api.v2010.account.Message;
 import com.twilio.type.PhoneNumber;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -19,12 +24,16 @@ public class NotificationChannelService {
     private static final Logger logger = LoggerFactory.getLogger(NotificationChannelService.class);
 
     private final JavaMailSender mailSender;
+    private final RestTemplate restTemplate = new RestTemplate();
     @Value("${twilio.account-sid:}")
     private String twilioAccountSid;
     @Value("${twilio.auth-token:}")
     private String twilioAuthToken;
     @Value("${twilio.whatsapp.from:}")
     private String twilioWhatsappFrom;
+
+    @Value("${telegram.bot-token:}")
+    private String telegramBotToken;
 
     public NotificationChannelService(JavaMailSender mailSender) {
         // Fail fast if mail sender bean is not present (should be provided by spring-boot-starter-mail)
@@ -84,5 +93,40 @@ public class NotificationChannelService {
         // Push notification integration would go here (e.g., Firebase Cloud Messaging)
         logger.info("App notification would be sent to user: {} with message: {}", 
             preference.getUserId(), notification.getMessage());
+    }
+
+    public void sendTelegramNotification(UserPreference preference, Notification notification) {
+        String token = (telegramBotToken != null && !telegramBotToken.isBlank())
+                ? telegramBotToken
+                : System.getenv("TELEGRAM_BOT_TOKEN");
+        if (token == null || token.isBlank()) {
+            logger.info("Telegram message would be sent (bot token not configured) userId={} chatId={}",
+                    preference.getUserId(), preference.getTelegramChatId());
+            return;
+        }
+        String chatId = preference.getTelegramChatId();
+        if (chatId == null || chatId.isBlank()) {
+            logger.warn("Skipping Telegram channel: no telegramChatId configured for userId={}", preference.getUserId());
+            return;
+        }
+        try {
+            String url = "https://api.telegram.org/bot" + token + "/sendMessage";
+            MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+            params.add("chat_id", chatId);
+            params.add("text", notification.getMessage());
+            ResponseEntity<String> response = restTemplate.postForEntity(url, params, String.class);
+            if (response.getStatusCode() == HttpStatus.OK) {
+                logger.info("notificationId={} userId={} channel=TELEGRAM status=SENT chatId={}",
+                        notification.getId(), preference.getUserId(), chatId);
+            } else {
+                logger.error("notificationId={} userId={} channel=TELEGRAM status=FAILED chatId={} httpStatus={} body={}",
+                        notification.getId(), preference.getUserId(), chatId, response.getStatusCode(), response.getBody());
+                throw new RuntimeException("Telegram API returned non-200 status: " + response.getStatusCode());
+            }
+        } catch (Exception e) {
+            logger.error("notificationId={} userId={} channel=TELEGRAM status=FAILED chatId={} error={}",
+                    notification.getId(), preference.getUserId(), chatId, e.getMessage());
+            throw e;
+        }
     }
 }

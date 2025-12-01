@@ -30,7 +30,7 @@ public class Notification {
     private LocalDateTime sentAt;
 
     public enum NotificationChannel {
-        EMAIL, WHATSAPP, APP, SMS
+        EMAIL, WHATSAPP, APP, SMS, TELEGRAM
     }
 
     public enum NotificationStatus {

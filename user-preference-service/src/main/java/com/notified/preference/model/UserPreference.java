@@ -23,6 +23,7 @@ public class UserPreference {
     private String email;
 
     private String phoneNumber;
+    private String telegramChatId;
 
     private String preference;
 
@@ -31,7 +32,7 @@ public class UserPreference {
     private Set<NotificationChannel> enabledChannels = new HashSet<>();
 
     public enum NotificationChannel {
-        EMAIL, WHATSAPP, APP, SMS
+        EMAIL, WHATSAPP, APP, SMS, TELEGRAM
     }
 
     // Constructors
@@ -78,6 +79,14 @@ public class UserPreference {
         this.phoneNumber = phoneNumber;
     }
 
+    public String getTelegramChatId() {
+        return telegramChatId;
+    }
+
+    public void setTelegramChatId(String telegramChatId) {
+        this.telegramChatId = telegramChatId;
+    }
+
     public Set<NotificationChannel> getEnabledChannels() {
         return enabledChannels;
     }
@@ -112,5 +121,9 @@ public class UserPreference {
 
     public boolean isAppEnabled() {
         return enabledChannels != null && enabledChannels.contains(NotificationChannel.APP);
+    }
+
+    public boolean isTelegramEnabled() {
+        return enabledChannels != null && enabledChannels.contains(NotificationChannel.TELEGRAM);
     }
 }

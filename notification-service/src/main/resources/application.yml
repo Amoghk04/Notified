@@ -37,3 +37,7 @@ twilio:
   auth-token: ${TWILIO_AUTH_TOKEN:}
   whatsapp:
     from: ${TWILIO_WHATSAPP_FROM:}
+
+# Telegram configuration
+telegram:
+  bot-token: 8502350218:AAEfNrL4qshYqu00sW2UiTGqIu_CgN_qprg

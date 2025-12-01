@@ -37,13 +37,12 @@ async function loadPreferences() {
             const data = await response.json();
             document.getElementById('pref-email').value = data.email || '';
             document.getElementById('pref-phone').value = data.phoneNumber || '';
+            document.getElementById('pref-telegram').value = data.telegramChatId || '';
             
             // Load channels
             const channels = data.enabledChannels || [];
             document.getElementById('channel-email').checked = channels.includes('EMAIL');
-            document.getElementById('channel-whatsapp').checked = channels.includes('WHATSAPP');
-            document.getElementById('channel-sms').checked = channels.includes('SMS');
-            document.getElementById('channel-app').checked = channels.includes('APP');
+            document.getElementById('channel-telegram').checked = channels.includes('TELEGRAM');
             
             // Load preferences (as array)
             const preferences = data.preferences || [];
@@ -146,11 +145,10 @@ function selectPreference(userId) {
 function clearPreferenceForm() {
     document.getElementById('pref-email').value = '';
     document.getElementById('pref-phone').value = '';
+    document.getElementById('pref-telegram').value = '';
     // Clear channels
     document.getElementById('channel-email').checked = false;
-    document.getElementById('channel-whatsapp').checked = false;
-    document.getElementById('channel-sms').checked = false;
-    document.getElementById('channel-app').checked = false;
+    document.getElementById('channel-telegram').checked = false;
     // Clear preferences (categories)
     document.getElementById('cat-sports').checked = false;
     document.getElementById('cat-news').checked = false;
@@ -170,9 +168,7 @@ function clearPreferenceForm() {
 function getEnabledChannels() {
     const channels = [];
     if (document.getElementById('channel-email').checked) channels.push('EMAIL');
-    if (document.getElementById('channel-whatsapp').checked) channels.push('WHATSAPP');
-    if (document.getElementById('channel-sms').checked) channels.push('SMS');
-    if (document.getElementById('channel-app').checked) channels.push('APP');
+    if (document.getElementById('channel-telegram').checked) channels.push('TELEGRAM');
     return channels;
 }
 
@@ -215,7 +211,8 @@ document.getElementById('preference-form').addEventListener('submit', async (e) 
         email: document.getElementById('pref-email').value,
         phoneNumber: document.getElementById('pref-phone').value,
         preferences: selectedPreferences,
-        enabledChannels: getEnabledChannels()
+        enabledChannels: getEnabledChannels(),
+        telegramChatId: document.getElementById('pref-telegram').value
     };
     
     try {
@@ -258,7 +255,8 @@ async function updatePreference() {
         email: document.getElementById('pref-email').value,
         phoneNumber: document.getElementById('pref-phone').value,
         preferences: selectedPreferences,
-        enabledChannels: getEnabledChannels()
+        enabledChannels: getEnabledChannels(),
+        telegramChatId: document.getElementById('pref-telegram').value
     };
     
     try {
@@ -319,8 +317,7 @@ async function deletePreference() {
 function getNotificationChannels() {
     const channels = [];
     if (document.getElementById('notif-channel-email').checked) channels.push('EMAIL');
-    if (document.getElementById('notif-channel-whatsapp').checked) channels.push('WHATSAPP');
-    if (document.getElementById('notif-channel-app').checked) channels.push('APP');
+    if (document.getElementById('notif-channel-telegram').checked) channels.push('TELEGRAM');
     return channels;
 }
 
