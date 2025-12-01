@@ -1,0 +1,39 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: notification-service
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: notifications_db
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ognotified@gmail.com
+    password: dtxapvlimhplbxgs
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+# Twilio configuration (can be set directly or via env fallbacks)
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:}
+  auth-token: ${TWILIO_AUTH_TOKEN:}
+  whatsapp:
+    from: ${TWILIO_WHATSAPP_FROM:}
