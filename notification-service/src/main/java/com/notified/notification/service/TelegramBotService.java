@@ -45,8 +45,10 @@ public class TelegramBotService {
         String email;
         Set<String> selectedCategories = new HashSet<>();
         boolean waitingForUserId;
-        boolean waitingForEmail;
+        boolean waitingForEmailChoice;  // Ask if they want email notifications
+        boolean waitingForEmail;        // Ask for actual email address
         boolean waitingForCategories;
+        boolean wantsEmail;             // Whether user wants email notifications
     }
 
     public void processUpdate(Map<String, Object> update) {
@@ -175,8 +177,28 @@ public class TelegramBotService {
         if (state.waitingForUserId) {
             state.userId = text.trim();
             state.waitingForUserId = false;
-            state.waitingForEmail = true;
-            sendTelegramMessage(chatId, "Great! Now please enter your email address:");
+            state.waitingForEmailChoice = true;
+            sendTelegramMessage(chatId, 
+                "📧 Would you like to receive notifications via email?\n\n" +
+                "Type YES or NO:");
+        } else if (state.waitingForEmailChoice) {
+            String input = text.trim().toUpperCase();
+            if (input.equals("YES") || input.equals("Y")) {
+                state.wantsEmail = true;
+                state.waitingForEmailChoice = false;
+                state.waitingForEmail = true;
+                sendTelegramMessage(chatId, "Great! Please enter your email address:");
+            } else if (input.equals("NO") || input.equals("N")) {
+                state.wantsEmail = false;
+                state.email = null;  // No email
+                state.waitingForEmailChoice = false;
+                state.waitingForCategories = true;
+                sendTelegramMessage(chatId, "👍 No problem! You'll receive notifications via Telegram only.");
+                // Send the numbered category list
+                sendCategoryList(chatId, state.selectedCategories);
+            } else {
+                sendTelegramMessage(chatId, "⚠️ Please type YES or NO:");
+            }
         } else if (state.waitingForEmail) {
             state.email = text.trim();
             state.waitingForEmail = false;
@@ -268,13 +290,17 @@ public class TelegramBotService {
             // Create or update user preference
             UserPreference pref = new UserPreference();
             pref.setUserId(state.userId);
-            pref.setEmail(state.email);
             pref.setTelegramChatId(chatId);
             
-            // Set enabled channels
+            // Set enabled channels based on user choices
             Set<UserPreference.NotificationChannel> channels = new HashSet<>();
-            channels.add(UserPreference.NotificationChannel.EMAIL);
             channels.add(UserPreference.NotificationChannel.TELEGRAM);
+            
+            // Only add email channel if user wants email notifications
+            if (state.wantsEmail && state.email != null && !state.email.isEmpty()) {
+                pref.setEmail(state.email);
+                channels.add(UserPreference.NotificationChannel.EMAIL);
+            }
             pref.setEnabledChannels(channels);
             
             // Set selected preferences (categories) as a List
@@ -302,6 +328,7 @@ public class TelegramBotService {
                 logger.info("Created new preferences for user: {}", state.userId);
             }
 
+            String emailStatus = state.wantsEmail ? state.email : "Not enabled";
             String successMsg = String.format(
                 "🎉 Registration complete!\n\n" +
                 "📋 Your Details:\n" +
@@ -315,7 +342,7 @@ public class TelegramBotService {
                 "/update - Update preferences\n" +
                 "/help - Show help",
                 state.userId,
-                state.email,
+                emailStatus,
                 state.selectedCategories.isEmpty() ? "None selected" : String.join(", ", state.selectedCategories)
             );
 
