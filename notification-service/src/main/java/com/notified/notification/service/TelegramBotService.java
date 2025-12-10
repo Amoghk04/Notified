@@ -7,6 +7,9 @@ import com.notified.notification.model.Notification;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -142,8 +145,6 @@ public class TelegramBotService {
                     state.selectedCategories.add(category);
                     answerCallbackQuery(queryId, "✅ " + category + " added");
                 }
-                // Refresh the keyboard
-                sendCategorySelection(chatId, state.selectedCategories);
             } else if (data.equals("done_categories")) {
                 answerCallbackQuery(queryId, "Preferences saved!");
                 finishRegistration(chatId, state);
@@ -180,12 +181,46 @@ public class TelegramBotService {
             state.email = text.trim();
             state.waitingForEmail = false;
             state.waitingForCategories = true;
-            sendTelegramMessage(chatId, "Perfect! Now select the notification categories you're interested in:");
-            sendCategorySelection(chatId, state.selectedCategories);
+            // Send the numbered category list
+            sendCategoryList(chatId, state.selectedCategories);
+        } else if (state.waitingForCategories) {
+            String input = text.trim().toUpperCase();
+            
+            if (input.equals("DONE")) {
+                // User wants to finish
+                finishRegistration(chatId, state);
+            } else {
+                // Try to parse as a number
+                String[] categories = {"SPORTS", "NEWS", "WEATHER", "SHOPPING", "FINANCE", 
+                                       "ENTERTAINMENT", "HEALTH", "TECHNOLOGY", "TRAVEL", 
+                                       "SOCIAL", "EDUCATION", "PROMOTIONS"};
+                
+                try {
+                    int num = Integer.parseInt(input.trim());
+                    if (num >= 1 && num <= categories.length) {
+                        String category = categories[num - 1];
+                        if (state.selectedCategories.contains(category)) {
+                            state.selectedCategories.remove(category);
+                            sendTelegramMessage(chatId, "❌ Removed: " + category);
+                        } else {
+                            state.selectedCategories.add(category);
+                            sendTelegramMessage(chatId, "✅ Added: " + category);
+                        }
+                        // Show updated selection
+                        sendCurrentSelection(chatId, state.selectedCategories);
+                    } else {
+                        sendTelegramMessage(chatId, "⚠️ Please enter a number between 1 and " + categories.length);
+                    }
+                } catch (NumberFormatException e) {
+                    sendTelegramMessage(chatId, 
+                        "⚠️ Please enter a number (1-" + categories.length + ") to select a category,\n" +
+                        "or type DONE to finish.");
+                }
+            }
         }
     }
 
-    private void sendCategorySelection(String chatId, Set<String> selectedCategories) {
+    private void sendCategoryList(String chatId, Set<String> selectedCategories) {
         String[] categories = {"SPORTS", "NEWS", "WEATHER", "SHOPPING", "FINANCE", 
                                "ENTERTAINMENT", "HEALTH", "TECHNOLOGY", "TRAVEL", 
                                "SOCIAL", "EDUCATION", "PROMOTIONS"};
@@ -197,60 +232,34 @@ public class TelegramBotService {
             Map.entry("SOCIAL", "👥"), Map.entry("EDUCATION", "📚"), Map.entry("PROMOTIONS", "🎁")
         );
 
-        StringBuilder msg = new StringBuilder("Select your preferences (tap to toggle):\n\n");
-        for (String cat : categories) {
+        StringBuilder msg = new StringBuilder();
+        msg.append("📋 *Select Your Notification Categories*\n\n");
+        msg.append("Type a number to add/remove a category:\n\n");
+        
+        for (int i = 0; i < categories.length; i++) {
+            String cat = categories[i];
             String mark = selectedCategories.contains(cat) ? "✅" : "⬜";
-            msg.append(mark).append(" ").append(categoryEmojis.getOrDefault(cat, "📌"))
+            msg.append(i + 1).append(" - ").append(mark).append(" ")
+               .append(categoryEmojis.getOrDefault(cat, "📌"))
                .append(" ").append(cat).append("\n");
         }
-        msg.append("\nSelected: ").append(selectedCategories.size()).append(" categories");
+        
+        msg.append("\n━━━━━━━━━━━━━━━━\n");
+        msg.append("📝 Type a number (1-12) to toggle\n");
+        msg.append("✅ Type DONE when finished");
 
-        sendMessageWithInlineKeyboard(chatId, msg.toString(), categories, categoryEmojis, selectedCategories);
+        sendTelegramMessage(chatId, msg.toString());
     }
 
-    private void sendMessageWithInlineKeyboard(String chatId, String text, String[] categories, 
-                                                Map<String, String> emojis, Set<String> selected) {
-        try {
-            String token = getToken();
-            if (token == null) return;
-
-            String url = "https://api.telegram.org/bot" + token + "/sendMessage";
-            
-            // Build inline keyboard
-            List<List<Map<String, String>>> keyboard = new ArrayList<>();
-            for (int i = 0; i < categories.length; i += 2) {
-                List<Map<String, String>> row = new ArrayList<>();
-                for (int j = i; j < Math.min(i + 2, categories.length); j++) {
-                    String cat = categories[j];
-                    String mark = selected.contains(cat) ? "✅" : "⬜";
-                    Map<String, String> button = new HashMap<>();
-                    button.put("text", mark + " " + emojis.getOrDefault(cat, "📌") + " " + cat);
-                    button.put("callback_data", "cat_" + cat);
-                    row.add(button);
-                }
-                keyboard.add(row);
-            }
-            
-            // Add done button
-            List<Map<String, String>> doneRow = new ArrayList<>();
-            Map<String, String> doneButton = new HashMap<>();
-            doneButton.put("text", "✅ Done - Save Preferences");
-            doneButton.put("callback_data", "done_categories");
-            doneRow.add(doneButton);
-            keyboard.add(doneRow);
-
-            Map<String, Object> replyMarkup = new HashMap<>();
-            replyMarkup.put("inline_keyboard", keyboard);
-
-            Map<String, Object> body = new HashMap<>();
-            body.put("chat_id", chatId);
-            body.put("text", text);
-            body.put("reply_markup", replyMarkup);
-
-            restTemplate.postForEntity(url, body, String.class);
-
-        } catch (Exception e) {
-            logger.error("Failed to send message with keyboard", e);
+    private void sendCurrentSelection(String chatId, Set<String> selectedCategories) {
+        if (selectedCategories.isEmpty()) {
+            sendTelegramMessage(chatId, 
+                "📊 Selected: None\n\n" +
+                "Type another number to add more, or DONE to finish.");
+        } else {
+            sendTelegramMessage(chatId, 
+                "📊 Selected: " + String.join(", ", selectedCategories) + "\n\n" +
+                "Type another number to add/remove, or DONE to finish.");
         }
     }
 
@@ -262,35 +271,52 @@ public class TelegramBotService {
             pref.setEmail(state.email);
             pref.setTelegramChatId(chatId);
             
+            // Set enabled channels
             Set<UserPreference.NotificationChannel> channels = new HashSet<>();
             channels.add(UserPreference.NotificationChannel.EMAIL);
             channels.add(UserPreference.NotificationChannel.TELEGRAM);
             pref.setEnabledChannels(channels);
+            
+            // Set selected preferences (categories) as a List
+            List<String> preferencesList = new ArrayList<>(state.selectedCategories);
+            pref.setPreferences(preferencesList);
 
-            // Update via API
+            // Update via API with proper Content-Type header
             String apiUrl = "http://localhost:8081/preferences";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<UserPreference> entity = new HttpEntity<>(pref, headers);
+            
             try {
-                // Try to update existing
-                restTemplate.put(apiUrl + "/" + state.userId, pref);
+                // Try to update existing using exchange() which supports HttpEntity with headers
+                restTemplate.exchange(
+                    apiUrl + "/" + state.userId, 
+                    org.springframework.http.HttpMethod.PUT, 
+                    entity, 
+                    UserPreference.class
+                );
+                logger.info("Updated preferences for user: {}", state.userId);
             } catch (Exception e) {
                 // Create new if doesn't exist
-                restTemplate.postForEntity(apiUrl, pref, UserPreference.class);
+                restTemplate.postForEntity(apiUrl, entity, UserPreference.class);
+                logger.info("Created new preferences for user: {}", state.userId);
             }
 
             String successMsg = String.format(
                 "🎉 Registration complete!\n\n" +
                 "📋 Your Details:\n" +
-                "User ID: %s\n" +
-                "Email: %s\n" +
-                "Categories: %s\n\n" +
-                "You'll now receive notifications here!\n\n" +
-                "Commands:\n" +
+                "👤 User ID: %s\n" +
+                "📧 Email: %s\n" +
+                "📱 Telegram: Connected ✅\n" +
+                "🔔 Preferences: %s\n\n" +
+                "You'll now receive notifications for your selected topics!\n\n" +
+                "📝 Commands:\n" +
                 "/history - View your notifications\n" +
                 "/update - Update preferences\n" +
                 "/help - Show help",
                 state.userId,
                 state.email,
-                state.selectedCategories.isEmpty() ? "None" : String.join(", ", state.selectedCategories)
+                state.selectedCategories.isEmpty() ? "None selected" : String.join(", ", state.selectedCategories)
             );
 
             sendTelegramMessage(chatId, successMsg);
@@ -415,7 +441,7 @@ public class TelegramBotService {
             userStates.put(chatId, state);
 
             sendTelegramMessage(chatId, "Let's update your preferences! Select your notification categories:");
-            sendCategorySelection(chatId, state.selectedCategories);
+            sendCategoryList(chatId, state.selectedCategories);
 
         } catch (Exception e) {
             logger.error("Error handling /update for chatId={}", chatId, e);

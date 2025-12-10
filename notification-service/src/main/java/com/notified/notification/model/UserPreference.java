@@ -1,5 +1,7 @@
 package com.notified.notification.model;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 public class UserPreference {
@@ -11,6 +13,7 @@ public class UserPreference {
     private String telegramChatId;
     private Set<NotificationChannel> enabledChannels;
     private String preference;
+    private List<String> preferences = new ArrayList<>();
 
     public enum NotificationChannel {
         EMAIL, WHATSAPP, APP, SMS, TELEGRAM
@@ -87,5 +90,13 @@ public class UserPreference {
 
     public boolean isTelegramEnabled() {
         return enabledChannels != null && enabledChannels.contains(NotificationChannel.TELEGRAM);
+    }
+
+    public List<String> getPreferences() {
+        return preferences;
+    }
+
+    public void setPreferences(List<String> preferences) {
+        this.preferences = preferences;
     }
 }

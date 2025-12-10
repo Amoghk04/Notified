@@ -41,3 +41,5 @@ twilio:
 # Telegram configuration
 telegram:
   bot-token: 8502350218:AAEfNrL4qshYqu00sW2UiTGqIu_CgN_qprg
+  polling:
+    enabled: true
