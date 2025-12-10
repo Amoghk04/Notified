@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -20,77 +21,32 @@ public class AutoNotificationService {
 
     private final UserPreferenceClient preferenceClient;
     private final NotificationService notificationService;
+    private final NewsApiService newsApiService;
 
-    // Sample messages for each category
-    private static final Map<String, List<String>> CATEGORY_MESSAGES = new HashMap<>();
+    // Category emojis for formatting
+    private static final Map<String, String> CATEGORY_EMOJIS = new HashMap<>();
 
     static {
-        CATEGORY_MESSAGES.put("SPORTS", Arrays.asList(
-            "⚽ Breaking: Champions League match tonight at 8 PM!",
-            "🏀 NBA Finals Update: Game 5 results are in!",
-            "🎾 Wimbledon 2024: Quarter-finals schedule released"
-        ));
-        CATEGORY_MESSAGES.put("NEWS", Arrays.asList(
-            "📰 Breaking News: Major policy announcement expected today",
-            "🌍 World Update: G20 Summit concludes with historic agreement",
-            "📢 Local News: City council approves new infrastructure project"
-        ));
-        CATEGORY_MESSAGES.put("WEATHER", Arrays.asList(
-            "🌤️ Weather Alert: Clear skies expected this week",
-            "🌧️ Rain Advisory: Carry an umbrella today!",
-            "🌡️ Temperature Update: High of 28°C expected today"
-        ));
-        CATEGORY_MESSAGES.put("SHOPPING", Arrays.asList(
-            "🛒 Flash Sale: 50% off on electronics - Today only!",
-            "🎁 Your wishlist item is now on sale!",
-            "📦 New arrivals: Check out the latest collection"
-        ));
-        CATEGORY_MESSAGES.put("FINANCE", Arrays.asList(
-            "💰 Market Update: S&P 500 reaches new high",
-            "📈 Your portfolio gained 2.5% today",
-            "💳 Reminder: Credit card payment due in 3 days"
-        ));
-        CATEGORY_MESSAGES.put("ENTERTAINMENT", Arrays.asList(
-            "🎬 New Release: Top movie of the week now streaming",
-            "🎵 Concert Alert: Your favorite artist announced new tour dates",
-            "📺 Trending: New series everyone is talking about"
-        ));
-        CATEGORY_MESSAGES.put("HEALTH", Arrays.asList(
-            "🏥 Health Tip: Stay hydrated - drink 8 glasses of water today",
-            "💊 Reminder: Time for your daily wellness check",
-            "🏃 Fitness Goal: You're 80% to your weekly step target!"
-        ));
-        CATEGORY_MESSAGES.put("TECHNOLOGY", Arrays.asList(
-            "💻 Tech News: New smartphone announced with revolutionary features",
-            "🔧 Software Update: Important security patch available",
-            "🚀 Innovation: AI breakthrough in medical diagnosis"
-        ));
-        CATEGORY_MESSAGES.put("TRAVEL", Arrays.asList(
-            "✈️ Travel Deal: 40% off flights to popular destinations",
-            "🏨 Hotel Alert: Last-minute deals in your saved destinations",
-            "🗺️ Trending: Top 10 travel destinations for 2024"
-        ));
-        CATEGORY_MESSAGES.put("SOCIAL", Arrays.asList(
-            "👥 Friend Update: 5 friends posted new updates",
-            "🎉 Event Reminder: Birthday party tomorrow at 7 PM",
-            "💬 New message from your group chat"
-        ));
-        CATEGORY_MESSAGES.put("EDUCATION", Arrays.asList(
-            "📚 Course Update: New lesson available in your enrolled course",
-            "🎓 Learning Tip: Spend 15 minutes on skill development today",
-            "📝 Quiz Reminder: Weekly assessment due tomorrow"
-        ));
-        CATEGORY_MESSAGES.put("PROMOTIONS", Arrays.asList(
-            "🎁 Exclusive Offer: Use code SAVE20 for 20% off",
-            "🏷️ Limited Time: Buy 2 Get 1 Free on selected items",
-            "⭐ VIP Access: Early bird sale starts now for members"
-        ));
+        CATEGORY_EMOJIS.put("SPORTS", "⚽");
+        CATEGORY_EMOJIS.put("NEWS", "📰");
+        CATEGORY_EMOJIS.put("WEATHER", "🌤️");
+        CATEGORY_EMOJIS.put("SHOPPING", "🛒");
+        CATEGORY_EMOJIS.put("FINANCE", "💰");
+        CATEGORY_EMOJIS.put("ENTERTAINMENT", "🎬");
+        CATEGORY_EMOJIS.put("HEALTH", "🏥");
+        CATEGORY_EMOJIS.put("TECHNOLOGY", "💻");
+        CATEGORY_EMOJIS.put("TRAVEL", "✈️");
+        CATEGORY_EMOJIS.put("SOCIAL", "👥");
+        CATEGORY_EMOJIS.put("EDUCATION", "📚");
+        CATEGORY_EMOJIS.put("PROMOTIONS", "🎁");
     }
 
     public AutoNotificationService(UserPreferenceClient preferenceClient, 
-                                   NotificationService notificationService) {
+                                   NotificationService notificationService,
+                                   NewsApiService newsApiService) {
         this.preferenceClient = preferenceClient;
         this.notificationService = notificationService;
+        this.newsApiService = newsApiService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -116,12 +72,36 @@ public class AutoNotificationService {
                 return;
             }
 
-            logger.info("Found {} registered users. Sending personalized notifications...", allPreferences.size());
+            logger.info("Found {} registered users. Fetching news and sending personalized notifications...", allPreferences.size());
             
+            // Collect all unique categories from all users
+            Set<String> allCategories = new HashSet<>();
+            for (UserPreference pref : allPreferences) {
+                if (pref.getPreferences() != null) {
+                    allCategories.addAll(pref.getPreferences());
+                }
+            }
+
+            if (allCategories.isEmpty()) {
+                logger.info("No categories selected by any user. Skipping notifications.");
+                return;
+            }
+
+            // Fetch news for all categories at once (to minimize API calls)
+            logger.info("Fetching news for categories: {}", allCategories);
+            Map<String, List<NewsApiService.NewsArticle>> newsByCategory = 
+                newsApiService.fetchNewsForCategories(new ArrayList<>(allCategories));
+
+            if (newsByCategory.isEmpty()) {
+                logger.warn("No news articles fetched. Skipping notifications.");
+                return;
+            }
+
             Random random = new Random();
             int successCount = 0;
             int failCount = 0;
 
+            // Send personalized news to each user
             for (UserPreference pref : allPreferences) {
                 try {
                     List<String> userPreferences = pref.getPreferences();
@@ -132,27 +112,32 @@ public class AutoNotificationService {
                     }
 
                     // Pick a random category from user's preferences
-                    String randomCategory = userPreferences.get(random.nextInt(userPreferences.size()));
+                    String randomCategory = userPreferences.get(random.nextInt(userPreferences.size())).toUpperCase();
                     
-                    // Get a random message for that category
-                    List<String> messages = CATEGORY_MESSAGES.get(randomCategory.toUpperCase());
-                    if (messages == null || messages.isEmpty()) {
-                        logger.debug("No messages found for category: {}", randomCategory);
+                    // Get news articles for that category
+                    List<NewsApiService.NewsArticle> articles = newsByCategory.get(randomCategory);
+                    if (articles == null || articles.isEmpty()) {
+                        logger.debug("No articles available for category: {} for user: {}", randomCategory, pref.getUserId());
                         continue;
                     }
                     
-                    String message = messages.get(random.nextInt(messages.size()));
+                    // Pick a random article
+                    NewsApiService.NewsArticle article = articles.get(random.nextInt(articles.size()));
                     
-                    // Create and send notification
+                    // Create and send notification with real news
                     Notification notification = new Notification();
                     notification.setUserId(pref.getUserId());
-                    notification.setSubject("📬 " + randomCategory + " Update");
-                    notification.setMessage(message + "\n\n📅 " + 
+                    
+                    String emoji = CATEGORY_EMOJIS.getOrDefault(randomCategory, "📬");
+                    notification.setSubject(emoji + " " + randomCategory + " News");
+                    notification.setMessage(article.toNotificationMessage() + "\n\n📅 " + 
                         LocalDateTime.now().format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm")));
                     
                     notificationService.sendNotification(notification);
                     
-                    logger.info("✅ Sent {} notification to user: {}", randomCategory, pref.getUserId());
+                    logger.info("✅ Sent {} news to user: {} - '{}'", 
+                        randomCategory, pref.getUserId(), 
+                        article.getTitle() != null ? article.getTitle().substring(0, Math.min(50, article.getTitle().length())) + "..." : "");
                     successCount++;
                     
                 } catch (Exception e) {
@@ -167,5 +152,15 @@ public class AutoNotificationService {
         } catch (Exception e) {
             logger.error("Failed to fetch user preferences for automatic notifications: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Scheduled task that sends notifications every 60 seconds.
+     * Adjust the fixedRate value to change the interval (in milliseconds).
+     */
+    @Scheduled(fixedRate = 60000)  // Every 60 seconds
+    public void scheduledNotifications() {
+        logger.info("⏰ Scheduled notification trigger - sending notifications to all users...");
+        sendNotificationsToAllUsers();
     }
 }

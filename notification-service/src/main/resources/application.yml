@@ -31,15 +31,14 @@ eureka:
   instance:
     prefer-ip-address: true
 
-# Twilio configuration (can be set directly or via env fallbacks)
-twilio:
-  account-sid: ${TWILIO_ACCOUNT_SID:}
-  auth-token: ${TWILIO_AUTH_TOKEN:}
-  whatsapp:
-    from: ${TWILIO_WHATSAPP_FROM:}
-
 # Telegram configuration
 telegram:
   bot-token: 8502350218:AAEfNrL4qshYqu00sW2UiTGqIu_CgN_qprg
   polling:
     enabled: true
+
+# News API configuration
+news:
+  api:
+    token: ${NEWS_API_TOKEN:KSPQ9Y8oPUK1gKlOaVJIMjb6GGF5acsASUABdhjs}
+    base-url: https://api.thenewsapi.com/v1/news/all
