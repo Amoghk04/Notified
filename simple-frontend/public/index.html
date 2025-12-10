@@ -41,16 +41,18 @@
                         <input type="email" id="pref-email" placeholder="user@example.com">
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group flex-grow">
-                            <label for="pref-phone">Phone Number (optional)</label>
-                            <input type="tel" id="pref-phone" placeholder="+1234567890">
-                        </div>
-                        <div class="form-group flex-grow">
-                            <label for="pref-telegram">Telegram Chat ID</label>
-                            <input type="text" id="pref-telegram" placeholder="e.g. 123456789">
-                            <p class="form-hint">Start a chat with your bot and share the chat ID</p>
-                        </div>
+                    <div class="form-group">
+                        <label for="pref-phone">Phone Number (optional)</label>
+                        <input type="tel" id="pref-phone" placeholder="+1234567890">
+                    </div>
+
+                    <div class="form-group">
+                        <label>📱 Telegram Notifications</label>
+                        <p class="form-hint">For Telegram notifications, register directly through our bot:</p>
+                        <a href="https://t.me/ognotified_bot" target="_blank" class="btn btn-primary" style="display: inline-block; text-decoration: none;">
+                            📨 Open @ognotified_bot on Telegram
+                        </a>
+                        <p class="form-hint" style="margin-top: 10px;">Use /register in the bot to set up your preferences there!</p>
                     </div>
 
                     <div class="form-group">
@@ -127,11 +129,8 @@
                                 <input type="checkbox" id="channel-email" value="EMAIL"> 
                                 <span>📧 Email</span>
                             </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="channel-telegram" value="TELEGRAM"> 
-                                <span>📨 Telegram</span>
-                            </label>
                         </div>
+                        <p class="form-hint">Note: Telegram notifications are managed through the <a href="https://t.me/ognotified_bot" target="_blank">@ognotified_bot</a></p>
                     </div>
 
                     <div class="btn-row">
@@ -178,11 +177,8 @@
                                 <input type="checkbox" id="notif-channel-email" value="EMAIL" checked> 
                                 <span>📧 Email</span>
                             </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="notif-channel-telegram" value="TELEGRAM"> 
-                                <span>📨 Telegram</span>
-                            </label>
                         </div>
+                        <p class="form-hint">Note: For Telegram, users receive notifications after registering with <a href="https://t.me/ognotified_bot" target="_blank">@ognotified_bot</a></p>
                     </div>
 
                     <button type="submit" class="btn btn-primary">Send Notification</button>
