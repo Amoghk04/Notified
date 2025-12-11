@@ -6,9 +6,7 @@ spring:
     name: notification-service
   data:
     mongodb:
-      host: localhost
-      port: 27017
-      database: notifications_db
+      uri: ${MONGODB_URI:mongodb+srv://ognotified_db_user:G2cV7IZmlb2cx5QF@ognotified.znqibuc.mongodb.net/notifications_db?retryWrites=true&w=majority&appName=OGNOTIFIED}
   mail:
     host: smtp.gmail.com
     port: 587

@@ -35,6 +35,12 @@ spring:
             - Path=/api/notifications/**
           filters:
             - StripPrefix=1
+        - id: news-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/news/**
+          filters:
+            - StripPrefix=1
         - id: telegram-webhook
           uri: lb://notification-service
           predicates:

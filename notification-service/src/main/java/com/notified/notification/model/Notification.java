@@ -7,7 +7,7 @@ import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
 import java.util.Set;
 
-@Document(collection = "notifications")
+@Document(collection = "user_notifications")
 public class Notification {
 
     @Id
@@ -28,6 +28,8 @@ public class Notification {
     private LocalDateTime createdAt;
 
     private LocalDateTime sentAt;
+    
+    private String articleContentHash; // Hash of the news article to prevent duplicates
 
     public enum NotificationChannel {
         EMAIL, WHATSAPP, APP, SMS, TELEGRAM
@@ -113,5 +115,13 @@ public class Notification {
 
     public void setSentAt(LocalDateTime sentAt) {
         this.sentAt = sentAt;
+    }
+
+    public String getArticleContentHash() {
+        return articleContentHash;
+    }
+
+    public void setArticleContentHash(String articleContentHash) {
+        this.articleContentHash = articleContentHash;
     }
 }
