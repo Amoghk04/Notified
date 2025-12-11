@@ -5,6 +5,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -30,6 +31,12 @@ public class UserPreference {
     private List<String> preferences = new ArrayList<>();
 
     private Set<NotificationChannel> enabledChannels = new HashSet<>();
+
+    // Notification frequency in minutes (default: 60 minutes = 1 hour)
+    private Integer notificationIntervalMinutes = 60;
+    
+    // Track when the last notification was sent to this user
+    private LocalDateTime lastNotificationSent;
 
     public enum NotificationChannel {
         EMAIL, WHATSAPP, APP, SMS, TELEGRAM
@@ -125,5 +132,21 @@ public class UserPreference {
 
     public boolean isTelegramEnabled() {
         return enabledChannels != null && enabledChannels.contains(NotificationChannel.TELEGRAM);
+    }
+
+    public Integer getNotificationIntervalMinutes() {
+        return notificationIntervalMinutes != null ? notificationIntervalMinutes : 60;
+    }
+
+    public void setNotificationIntervalMinutes(Integer notificationIntervalMinutes) {
+        this.notificationIntervalMinutes = notificationIntervalMinutes;
+    }
+
+    public LocalDateTime getLastNotificationSent() {
+        return lastNotificationSent;
+    }
+
+    public void setLastNotificationSent(LocalDateTime lastNotificationSent) {
+        this.lastNotificationSent = lastNotificationSent;
     }
 }

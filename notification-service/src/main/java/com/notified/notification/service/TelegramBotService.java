@@ -48,7 +48,19 @@ public class TelegramBotService {
         boolean waitingForEmailChoice;  // Ask if they want email notifications
         boolean waitingForEmail;        // Ask for actual email address
         boolean waitingForCategories;
+        boolean waitingForFrequency;    // Ask for notification frequency
         boolean wantsEmail;             // Whether user wants email notifications
+        Integer notificationIntervalMinutes = 60;  // Default: 1 hour
+    }
+    
+    // Notification frequency options in minutes
+    private static final Map<String, Integer> FREQUENCY_OPTIONS = new LinkedHashMap<>();
+    static {
+        FREQUENCY_OPTIONS.put("1", 1);           // Every minute (for testing)
+        FREQUENCY_OPTIONS.put("2", 720);         // Every 12 hours
+        FREQUENCY_OPTIONS.put("3", 1440);        // Every 24 hours (daily)
+        FREQUENCY_OPTIONS.put("4", 2880);        // Every 48 hours
+        FREQUENCY_OPTIONS.put("5", 10080);       // Every week
     }
 
     public void processUpdate(Map<String, Object> update) {
@@ -110,6 +122,8 @@ public class TelegramBotService {
                 handleHistoryCommand(chatId);
             } else if (text.startsWith("/update")) {
                 handleUpdatePreferencesCommand(chatId);
+            } else if (text.startsWith("/frequency")) {
+                handleFrequencyCommand(chatId);
             } else if (text.startsWith("/help")) {
                 handleHelpCommand(chatId);
             } else {
@@ -210,8 +224,10 @@ public class TelegramBotService {
             String upperInput = input.toUpperCase();
             
             if (upperInput.equals("DONE")) {
-                // User wants to finish
-                finishRegistration(chatId, state);
+                // Move to frequency selection
+                state.waitingForCategories = false;
+                state.waitingForFrequency = true;
+                sendFrequencyOptions(chatId);
             } else {
                 // Try to parse as a number first
                 String[] categories = {"SPORTS", "NEWS", "WEATHER", "SHOPPING", "FINANCE", 
@@ -259,7 +275,43 @@ public class TelegramBotService {
                     }
                 }
             }
+        } else if (state.waitingForFrequency) {
+            String input = text.trim();
+            
+            if (FREQUENCY_OPTIONS.containsKey(input)) {
+                state.notificationIntervalMinutes = FREQUENCY_OPTIONS.get(input);
+                state.waitingForFrequency = false;
+                finishRegistration(chatId, state);
+            } else {
+                sendTelegramMessage(chatId, "⚠️ Please enter a number from 1 to 5:");
+                sendFrequencyOptions(chatId);
+            }
         }
+    }
+    
+    private void sendFrequencyOptions(String chatId) {
+        StringBuilder msg = new StringBuilder();
+        msg.append("⏰ *How often do you want to receive notifications?*\n\n");
+        msg.append("1️⃣ - Every minute (for testing)\n");
+        msg.append("2️⃣ - Every 12 hours\n");
+        msg.append("3️⃣ - Every 24 hours (daily)\n");
+        msg.append("4️⃣ - Every 48 hours\n");
+        msg.append("5️⃣ - Every week\n\n");
+        msg.append("Type a number (1-5):");
+        
+        sendTelegramMessage(chatId, msg.toString());
+    }
+    
+    private String getFrequencyText(int minutes) {
+        if (minutes <= 1) return "Every minute";
+        if (minutes == 720) return "Every 12 hours";
+        if (minutes == 1440) return "Every 24 hours (daily)";
+        if (minutes == 2880) return "Every 48 hours";
+        if (minutes == 10080) return "Every week";
+        // For custom values
+        if (minutes < 60) return "Every " + minutes + " minutes";
+        if (minutes < 1440) return "Every " + (minutes / 60) + " hours";
+        return "Every " + (minutes / 1440) + " days";
     }
 
     private void sendCategoryList(String chatId, Set<String> selectedCategories) {
@@ -350,6 +402,9 @@ public class TelegramBotService {
             // Set selected preferences (categories) as a List
             List<String> preferencesList = new ArrayList<>(state.selectedCategories);
             pref.setPreferences(preferencesList);
+            
+            // Set notification frequency
+            pref.setNotificationIntervalMinutes(state.notificationIntervalMinutes);
 
             // Update via API with proper Content-Type header
             String apiUrl = "http://localhost:8081/preferences";
@@ -372,22 +427,26 @@ public class TelegramBotService {
                 logger.info("Created new preferences for user: {}", state.userId);
             }
 
-            String emailStatus = state.wantsEmail ? state.email : "Not enabled";
+                        String emailStatus = state.wantsEmail ? state.email : "Not enabled";
+            String frequencyText = getFrequencyText(state.notificationIntervalMinutes);
             String successMsg = String.format(
                 "🎉 Registration complete!\n\n" +
                 "📋 Your Details:\n" +
                 "👤 User ID: %s\n" +
                 "📧 Email: %s\n" +
                 "📱 Telegram: Connected ✅\n" +
-                "🔔 Preferences: %s\n\n" +
+                "🔔 Preferences: %s\n" +
+                "⏰ Frequency: %s\n\n" +
                 "You'll now receive notifications for your selected topics!\n\n" +
                 "📝 Commands:\n" +
                 "/history - View your notifications\n" +
-                "/update - Update preferences\n" +
+                "/update - Update category preferences\n" +
+                "/frequency - Change notification frequency\n" +
                 "/help - Show help",
                 state.userId,
                 emailStatus,
-                state.selectedCategories.isEmpty() ? "None selected" : String.join(", ", state.selectedCategories)
+                state.selectedCategories.isEmpty() ? "None selected" : String.join(", ", state.selectedCategories),
+                frequencyText
             );
 
             sendTelegramMessage(chatId, successMsg);
@@ -408,7 +467,8 @@ public class TelegramBotService {
                 "📋 Available Commands:\n" +
                 "/register - Register and set your preferences\n" +
                 "/history - View your notification history\n" +
-                "/update - Update your preferences\n" +
+                "/update - Update your category preferences\n" +
+                "/frequency - Change notification frequency\n" +
                 "/help - Show this help message\n\n" +
                 "Start by using /register to set up your account!",
                 firstName != null ? firstName : "friend"
@@ -527,11 +587,52 @@ public class TelegramBotService {
             "/start - Welcome message\n" +
             "/register - Register and set preferences\n" +
             "/history - View notification history\n" +
-            "/update - Update your preferences\n" +
+            "/update - Update your category preferences\n" +
+            "/frequency - Change notification frequency\n" +
             "/help - Show this help message\n\n" +
             "ℹ️ This bot helps you manage notifications directly through Telegram!";
         
         sendTelegramMessage(chatId, helpMsg);
+    }
+    
+    private void handleFrequencyCommand(String chatId) {
+        try {
+            // Find user by telegram chat ID
+            String apiUrl = "http://localhost:8081/preferences";
+            UserPreference[] allPrefs = restTemplate.getForObject(apiUrl, UserPreference[].class);
+            
+            UserPreference userPref = null;
+            if (allPrefs != null) {
+                for (UserPreference pref : allPrefs) {
+                    if (chatId.equals(pref.getTelegramChatId())) {
+                        userPref = pref;
+                        break;
+                    }
+                }
+            }
+
+            if (userPref == null) {
+                sendTelegramMessage(chatId, "You're not registered yet. Use /register to get started!");
+                return;
+            }
+
+            // Start frequency update flow
+            UserRegistrationState state = new UserRegistrationState();
+            state.userId = userPref.getUserId();
+            state.email = userPref.getEmail();
+            state.selectedCategories = new HashSet<>(userPref.getPreferences() != null ? userPref.getPreferences() : new ArrayList<>());
+            state.wantsEmail = userPref.isEmailEnabled();
+            state.waitingForFrequency = true;
+            userStates.put(chatId, state);
+            
+            String currentFrequency = getFrequencyText(userPref.getNotificationIntervalMinutes());
+            sendTelegramMessage(chatId, "⏰ Your current notification frequency: " + currentFrequency + "\n\nLet's change it:");
+            sendFrequencyOptions(chatId);
+
+        } catch (Exception e) {
+            logger.error("Error handling /frequency for chatId={}", chatId, e);
+            sendTelegramMessage(chatId, "❌ Failed to update frequency. Please try again later.");
+        }
     }
 
     private String getToken() {

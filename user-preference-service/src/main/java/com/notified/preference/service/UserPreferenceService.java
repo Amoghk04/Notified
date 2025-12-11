@@ -36,6 +36,16 @@ public class UserPreferenceService {
             existingPref.setPhoneNumber(preference.getPhoneNumber());
             existingPref.setTelegramChatId(preference.getTelegramChatId());
             existingPref.setEnabledChannels(preference.getEnabledChannels());
+            existingPref.setPreferences(preference.getPreferences());
+            existingPref.setPreference(preference.getPreference());
+            // Update notification interval if provided
+            if (preference.getNotificationIntervalMinutes() != null) {
+                existingPref.setNotificationIntervalMinutes(preference.getNotificationIntervalMinutes());
+            }
+            // Update lastNotificationSent if provided
+            if (preference.getLastNotificationSent() != null) {
+                existingPref.setLastNotificationSent(preference.getLastNotificationSent());
+            }
             return repository.save(existingPref);
         } else {
             preference.setUserId(userId);

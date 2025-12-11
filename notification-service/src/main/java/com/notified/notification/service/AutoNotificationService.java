@@ -9,9 +9,15 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 @Service
@@ -21,7 +27,8 @@ public class AutoNotificationService {
 
     private final UserPreferenceClient preferenceClient;
     private final NotificationService notificationService;
-    private final RssNewsService rssNewsService;  // Using FREE RSS feeds instead of paid API
+    private final RssNewsService rssNewsService;
+    private final RestTemplate restTemplate = new RestTemplate();
 
     // Category emojis for formatting
     private static final Map<String, String> CATEGORY_EMOJIS = new HashMap<>();
@@ -51,7 +58,7 @@ public class AutoNotificationService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void sendInitialNotifications() {
-        logger.info("🚀 Application ready - Sending automatic notifications to all registered users...");
+        logger.info("🚀 Application ready - Will check and send notifications based on user preferences...");
         
         // Small delay to ensure all services are fully initialized
         try {
@@ -60,10 +67,46 @@ public class AutoNotificationService {
             Thread.currentThread().interrupt();
         }
 
-        sendNotificationsToAllUsers();
+        sendNotificationsToEligibleUsers();
     }
 
-    public void sendNotificationsToAllUsers() {
+    /**
+     * Check if a user is due for a notification based on their interval settings
+     */
+    private boolean isUserDueForNotification(UserPreference pref) {
+        LocalDateTime lastSent = pref.getLastNotificationSent();
+        int intervalMinutes = pref.getNotificationIntervalMinutes();
+        
+        // If never sent, user is due
+        if (lastSent == null) {
+            return true;
+        }
+        
+        // Check if enough time has passed
+        long minutesSinceLastNotification = ChronoUnit.MINUTES.between(lastSent, LocalDateTime.now());
+        return minutesSinceLastNotification >= intervalMinutes;
+    }
+
+    /**
+     * Update the lastNotificationSent timestamp for a user
+     */
+    private void updateLastNotificationSent(UserPreference pref) {
+        try {
+            pref.setLastNotificationSent(LocalDateTime.now());
+            
+            String apiUrl = "http://localhost:8081/preferences/" + pref.getUserId();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<UserPreference> entity = new HttpEntity<>(pref, headers);
+            
+            restTemplate.exchange(apiUrl, HttpMethod.PUT, entity, UserPreference.class);
+            logger.debug("Updated lastNotificationSent for user: {}", pref.getUserId());
+        } catch (Exception e) {
+            logger.warn("Failed to update lastNotificationSent for user: {} - {}", pref.getUserId(), e.getMessage());
+        }
+    }
+
+    public void sendNotificationsToEligibleUsers() {
         try {
             List<UserPreference> allPreferences = preferenceClient.getAllPreferences();
             
@@ -72,18 +115,32 @@ public class AutoNotificationService {
                 return;
             }
 
-            logger.info("Found {} registered users. Fetching news and sending personalized notifications...", allPreferences.size());
-            
-            // Collect all unique categories from all users
-            Set<String> allCategories = new HashSet<>();
+            // Filter users who are due for notifications
+            List<UserPreference> eligibleUsers = new ArrayList<>();
             for (UserPreference pref : allPreferences) {
+                if (isUserDueForNotification(pref)) {
+                    eligibleUsers.add(pref);
+                }
+            }
+
+            if (eligibleUsers.isEmpty()) {
+                logger.debug("No users are due for notifications at this time.");
+                return;
+            }
+
+            logger.info("Found {} users due for notifications out of {} total users", 
+                eligibleUsers.size(), allPreferences.size());
+            
+            // Collect all unique categories from eligible users
+            Set<String> allCategories = new HashSet<>();
+            for (UserPreference pref : eligibleUsers) {
                 if (pref.getPreferences() != null) {
                     allCategories.addAll(pref.getPreferences());
                 }
             }
 
             if (allCategories.isEmpty()) {
-                logger.info("No categories selected by any user. Skipping notifications.");
+                logger.info("No categories selected by any eligible user. Skipping notifications.");
                 return;
             }
 
@@ -101,8 +158,8 @@ public class AutoNotificationService {
             int successCount = 0;
             int failCount = 0;
 
-            // Send personalized news to each user
-            for (UserPreference pref : allPreferences) {
+            // Send personalized news to each eligible user
+            for (UserPreference pref : eligibleUsers) {
                 try {
                     List<String> userPreferences = pref.getPreferences();
                     
@@ -135,8 +192,11 @@ public class AutoNotificationService {
                     
                     notificationService.sendNotification(notification);
                     
-                    logger.info("✅ Sent {} news to user: {} - '{}'", 
-                        randomCategory, pref.getUserId(), 
+                    // Update the last notification timestamp
+                    updateLastNotificationSent(pref);
+                    
+                    logger.info("✅ Sent {} news to user: {} (interval: {} mins) - '{}'", 
+                        randomCategory, pref.getUserId(), pref.getNotificationIntervalMinutes(),
                         article.getTitle() != null ? article.getTitle().substring(0, Math.min(50, article.getTitle().length())) + "..." : "");
                     successCount++;
                     
@@ -155,12 +215,12 @@ public class AutoNotificationService {
     }
 
     /**
-     * Scheduled task that sends notifications every 60 seconds.
-     * Adjust the fixedRate value to change the interval (in milliseconds).
+     * Scheduled task that checks every minute for users who are due for notifications.
+     * Each user will receive notifications based on their individual interval settings.
      */
-    @Scheduled(fixedRate = 60000)  // Every 60 seconds
+    @Scheduled(fixedRate = 60000)  // Check every 60 seconds
     public void scheduledNotifications() {
-        logger.info("⏰ Scheduled notification trigger - sending notifications to all users...");
-        sendNotificationsToAllUsers();
+        logger.debug("⏰ Scheduled check - looking for users due for notifications...");
+        sendNotificationsToEligibleUsers();
     }
 }
