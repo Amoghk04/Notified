@@ -7,6 +7,8 @@ import com.notified.notification.model.Notification;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -38,6 +40,49 @@ public class TelegramBotService {
     public TelegramBotService(UserPreferenceClient preferenceClient, NotificationRepository notificationRepository) {
         this.preferenceClient = preferenceClient;
         this.notificationRepository = notificationRepository;
+    }
+    
+    /**
+     * Register bot commands with Telegram for autofill/autocomplete
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void registerBotCommands() {
+        String token = getToken();
+        if (token == null) {
+            logger.warn("Cannot register bot commands - no token configured");
+            return;
+        }
+        
+        try {
+            String url = "https://api.telegram.org/bot" + token + "/setMyCommands";
+            
+            // Build commands JSON
+            List<Map<String, String>> commands = new ArrayList<>();
+            commands.add(Map.of("command", "start", "description", "👋 Welcome message"));
+            commands.add(Map.of("command", "register", "description", "📝 Register new account"));
+            commands.add(Map.of("command", "updatepref", "description", "⚙️ Update your preferences"));
+            commands.add(Map.of("command", "frequency", "description", "⏰ Change notification frequency"));
+            commands.add(Map.of("command", "status", "description", "📊 View your current settings"));
+            commands.add(Map.of("command", "history", "description", "📜 View notification history"));
+            commands.add(Map.of("command", "help", "description", "❓ Show help message"));
+            
+            Map<String, Object> body = new HashMap<>();
+            body.put("commands", commands);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            
+            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+            
+            if (response.getStatusCode().is2xxSuccessful()) {
+                logger.info("✅ Successfully registered bot commands with Telegram for autofill");
+            } else {
+                logger.warn("Failed to register bot commands: {}", response.getBody());
+            }
+        } catch (Exception e) {
+            logger.error("Error registering bot commands with Telegram: {}", e.getMessage());
+        }
     }
 
     private static class UserRegistrationState {
@@ -114,20 +159,29 @@ public class TelegramBotService {
             }
 
             // Handle commands
-            if (text.startsWith("/start")) {
+            if (text.equals("/")) {
+                // Show command menu when just "/" is typed
+                showCommandMenu(chatId);
+            } else if (text.startsWith("/start")) {
                 handleStartCommand(chatId, firstName, username);
             } else if (text.startsWith("/register")) {
                 handleRegisterCommand(chatId);
             } else if (text.startsWith("/history")) {
                 handleHistoryCommand(chatId);
-            } else if (text.startsWith("/update")) {
+            } else if (text.startsWith("/updatepref") || text.startsWith("/update")) {
                 handleUpdatePreferencesCommand(chatId);
             } else if (text.startsWith("/frequency")) {
                 handleFrequencyCommand(chatId);
+            } else if (text.startsWith("/status")) {
+                handleStatusCommand(chatId);
             } else if (text.startsWith("/help")) {
                 handleHelpCommand(chatId);
+            } else if (text.startsWith("/refreshcommands")) {
+                // Admin command to re-register bot commands
+                registerBotCommands();
+                sendTelegramMessage(chatId, "✅ Bot commands refreshed! Type / to see them.");
             } else {
-                sendTelegramMessage(chatId, "Unknown command. Try /help for available commands.");
+                sendTelegramMessage(chatId, "Unknown command. Type / to see all available commands.");
             }
 
         } catch (Exception e) {
@@ -427,7 +481,7 @@ public class TelegramBotService {
                 logger.info("Created new preferences for user: {}", state.userId);
             }
 
-                        String emailStatus = state.wantsEmail ? state.email : "Not enabled";
+            String emailStatus = state.wantsEmail ? state.email : "Not enabled";
             String frequencyText = getFrequencyText(state.notificationIntervalMinutes);
             String successMsg = String.format(
                 "🎉 Registration complete!\n\n" +
@@ -439,10 +493,12 @@ public class TelegramBotService {
                 "⏰ Frequency: %s\n\n" +
                 "You'll now receive notifications for your selected topics!\n\n" +
                 "📝 Commands:\n" +
-                "/history - View your notifications\n" +
-                "/update - Update category preferences\n" +
+                "/updatepref - Update your preferences\n" +
                 "/frequency - Change notification frequency\n" +
-                "/help - Show help",
+                "/status - View your current settings\n" +
+                "/history - View notification history\n" +
+                "/help - Show help\n\n" +
+                "💡 Type / to see all commands!",
                 state.userId,
                 emailStatus,
                 state.selectedCategories.isEmpty() ? "None selected" : String.join(", ", state.selectedCategories),
@@ -466,10 +522,12 @@ public class TelegramBotService {
                 "I'll help you manage your notification preferences.\n\n" +
                 "📋 Available Commands:\n" +
                 "/register - Register and set your preferences\n" +
-                "/history - View your notification history\n" +
-                "/update - Update your category preferences\n" +
+                "/updatepref - Update your preferences\n" +
                 "/frequency - Change notification frequency\n" +
-                "/help - Show this help message\n\n" +
+                "/status - View your current settings\n" +
+                "/history - View notification history\n" +
+                "/help - Show detailed help\n\n" +
+                "💡 Type / to see all commands with autofill!\n\n" +
                 "Start by using /register to set up your account!",
                 firstName != null ? firstName : "friend"
             );
@@ -564,18 +622,29 @@ public class TelegramBotService {
                 return;
             }
 
-            // Start update flow
+            // Start update flow with existing preferences loaded
             UserRegistrationState state = new UserRegistrationState();
             state.userId = userPref.getUserId();
             state.email = userPref.getEmail();
+            state.wantsEmail = userPref.isEmailEnabled();
+            state.notificationIntervalMinutes = userPref.getNotificationIntervalMinutes();
+            // Load existing categories
+            if (userPref.getPreferences() != null) {
+                state.selectedCategories = new HashSet<>(userPref.getPreferences());
+            }
             state.waitingForCategories = true;
             userStates.put(chatId, state);
 
-            sendTelegramMessage(chatId, "Let's update your preferences! Select your notification categories:");
+            String currentPrefs = state.selectedCategories.isEmpty() ? "None" : String.join(", ", state.selectedCategories);
+            sendTelegramMessage(chatId, 
+                "⚙️ *Update Your Preferences*\n\n" +
+                "📌 Current categories: " + currentPrefs + "\n" +
+                "⏰ Current frequency: " + getFrequencyText(state.notificationIntervalMinutes) + "\n\n" +
+                "Select categories to add/remove:");
             sendCategoryList(chatId, state.selectedCategories);
 
         } catch (Exception e) {
-            logger.error("Error handling /update for chatId={}", chatId, e);
+            logger.error("Error handling /updatepref for chatId={}", chatId, e);
             sendTelegramMessage(chatId, "❌ Failed to start update. Please try again later.");
         }
     }
@@ -586,13 +655,84 @@ public class TelegramBotService {
             "📋 Available Commands:\n\n" +
             "/start - Welcome message\n" +
             "/register - Register and set preferences\n" +
-            "/history - View notification history\n" +
-            "/update - Update your category preferences\n" +
+            "/updatepref - Update your preferences (categories, email, frequency)\n" +
             "/frequency - Change notification frequency\n" +
+            "/status - View your current settings\n" +
+            "/history - View notification history\n" +
             "/help - Show this help message\n\n" +
-            "ℹ️ This bot helps you manage notifications directly through Telegram!";
+            "💡 Tip: Type / to see all commands with autofill!";
         
         sendTelegramMessage(chatId, helpMsg);
+    }
+    
+    private void showCommandMenu(String chatId) {
+        String menuMsg = 
+            "📋 *Available Commands:*\n\n" +
+            "🚀 /start - Welcome message\n" +
+            "📝 /register - Register new account\n" +
+            "⚙️ /updatepref - Update your preferences\n" +
+            "⏰ /frequency - Change notification frequency\n" +
+            "📊 /status - View your current settings\n" +
+            "📜 /history - View notification history\n" +
+            "❓ /help - Show detailed help\n\n" +
+            "Tap any command to use it!";
+        
+        sendTelegramMessage(chatId, menuMsg);
+    }
+    
+    private void handleStatusCommand(String chatId) {
+        try {
+            // Find user by telegram chat ID
+            String apiUrl = "http://localhost:8081/preferences";
+            UserPreference[] allPrefs = restTemplate.getForObject(apiUrl, UserPreference[].class);
+            
+            UserPreference userPref = null;
+            if (allPrefs != null) {
+                for (UserPreference pref : allPrefs) {
+                    if (chatId.equals(pref.getTelegramChatId())) {
+                        userPref = pref;
+                        break;
+                    }
+                }
+            }
+
+            if (userPref == null) {
+                sendTelegramMessage(chatId, "You're not registered yet. Use /register to get started!");
+                return;
+            }
+
+            String emailStatus = userPref.isEmailEnabled() ? userPref.getEmail() : "Not enabled";
+            String frequencyText = getFrequencyText(userPref.getNotificationIntervalMinutes());
+            List<String> prefs = userPref.getPreferences();
+            String categories = (prefs == null || prefs.isEmpty()) ? "None selected" : String.join(", ", prefs);
+            
+            String lastNotif = "Never";
+            if (userPref.getLastNotificationSent() != null) {
+                lastNotif = userPref.getLastNotificationSent().toString();
+            }
+
+            String statusMsg = String.format(
+                "📊 *Your Current Settings*\n\n" +
+                "👤 User ID: %s\n" +
+                "📧 Email: %s\n" +
+                "📱 Telegram: Connected ✅\n" +
+                "🔔 Categories: %s\n" +
+                "⏰ Frequency: %s\n" +
+                "📅 Last Notification: %s\n\n" +
+                "Use /updatepref to change settings.",
+                userPref.getUserId(),
+                emailStatus,
+                categories,
+                frequencyText,
+                lastNotif
+            );
+
+            sendTelegramMessage(chatId, statusMsg);
+
+        } catch (Exception e) {
+            logger.error("Error handling /status for chatId={}", chatId, e);
+            sendTelegramMessage(chatId, "❌ Failed to load status. Please try again later.");
+        }
     }
     
     private void handleFrequencyCommand(String chatId) {
