@@ -206,13 +206,14 @@ public class TelegramBotService {
             // Send the numbered category list
             sendCategoryList(chatId, state.selectedCategories);
         } else if (state.waitingForCategories) {
-            String input = text.trim().toUpperCase();
+            String input = text.trim();
+            String upperInput = input.toUpperCase();
             
-            if (input.equals("DONE")) {
+            if (upperInput.equals("DONE")) {
                 // User wants to finish
                 finishRegistration(chatId, state);
             } else {
-                // Try to parse as a number
+                // Try to parse as a number first
                 String[] categories = {"SPORTS", "NEWS", "WEATHER", "SHOPPING", "FINANCE", 
                                        "ENTERTAINMENT", "HEALTH", "TECHNOLOGY", "TRAVEL", 
                                        "SOCIAL", "EDUCATION", "PROMOTIONS"};
@@ -231,12 +232,31 @@ public class TelegramBotService {
                         // Show updated selection
                         sendCurrentSelection(chatId, state.selectedCategories);
                     } else {
-                        sendTelegramMessage(chatId, "⚠️ Please enter a number between 1 and " + categories.length);
+                        sendTelegramMessage(chatId, "⚠️ Please enter a number between 1 and " + categories.length + 
+                            "\nor type a custom topic name.");
                     }
                 } catch (NumberFormatException e) {
-                    sendTelegramMessage(chatId, 
-                        "⚠️ Please enter a number (1-" + categories.length + ") to select a category,\n" +
-                        "or type DONE to finish.");
+                    // Not a number - treat as custom topic
+                    if (input.length() >= 2 && input.length() <= 30) {
+                        String customTopic = input.toUpperCase().replaceAll("[^A-Z0-9_ ]", "").trim();
+                        if (!customTopic.isEmpty()) {
+                            if (state.selectedCategories.contains(customTopic)) {
+                                state.selectedCategories.remove(customTopic);
+                                sendTelegramMessage(chatId, "❌ Removed custom topic: " + customTopic);
+                            } else {
+                                state.selectedCategories.add(customTopic);
+                                sendTelegramMessage(chatId, "✅ Added custom topic: " + customTopic);
+                            }
+                            sendCurrentSelection(chatId, state.selectedCategories);
+                        } else {
+                            sendTelegramMessage(chatId, "⚠️ Invalid topic name. Please use letters and numbers only.");
+                        }
+                    } else {
+                        sendTelegramMessage(chatId, 
+                            "⚠️ Enter a number (1-12) for preset categories,\n" +
+                            "or type a custom topic (2-30 characters),\n" +
+                            "or type DONE to finish.");
+                    }
                 }
             }
         }
@@ -268,20 +288,44 @@ public class TelegramBotService {
         
         msg.append("\n━━━━━━━━━━━━━━━━\n");
         msg.append("📝 Type a number (1-12) to toggle\n");
+        msg.append("✏️ Or type any custom topic (e.g., Cricket, Bollywood, IPL)\n");
         msg.append("✅ Type DONE when finished");
 
         sendTelegramMessage(chatId, msg.toString());
     }
 
     private void sendCurrentSelection(String chatId, Set<String> selectedCategories) {
+        // Separate preset categories from custom topics
+        String[] presetCategories = {"SPORTS", "NEWS", "WEATHER", "SHOPPING", "FINANCE", 
+                                     "ENTERTAINMENT", "HEALTH", "TECHNOLOGY", "TRAVEL", 
+                                     "SOCIAL", "EDUCATION", "PROMOTIONS"};
+        Set<String> presetSet = new java.util.HashSet<>(Arrays.asList(presetCategories));
+        
+        List<String> presets = new ArrayList<>();
+        List<String> custom = new ArrayList<>();
+        
+        for (String cat : selectedCategories) {
+            if (presetSet.contains(cat)) {
+                presets.add(cat);
+            } else {
+                custom.add(cat);
+            }
+        }
+        
         if (selectedCategories.isEmpty()) {
             sendTelegramMessage(chatId, 
                 "📊 Selected: None\n\n" +
-                "Type another number to add more, or DONE to finish.");
+                "Type a number, custom topic, or DONE to finish.");
         } else {
-            sendTelegramMessage(chatId, 
-                "📊 Selected: " + String.join(", ", selectedCategories) + "\n\n" +
-                "Type another number to add/remove, or DONE to finish.");
+            StringBuilder msg = new StringBuilder("📊 *Your Selection:*\n");
+            if (!presets.isEmpty()) {
+                msg.append("📌 Categories: ").append(String.join(", ", presets)).append("\n");
+            }
+            if (!custom.isEmpty()) {
+                msg.append("✏️ Custom: ").append(String.join(", ", custom)).append("\n");
+            }
+            msg.append("\nType another number/topic to add/remove, or DONE to finish.");
+            sendTelegramMessage(chatId, msg.toString());
         }
     }
 

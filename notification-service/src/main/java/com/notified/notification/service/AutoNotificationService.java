@@ -21,7 +21,7 @@ public class AutoNotificationService {
 
     private final UserPreferenceClient preferenceClient;
     private final NotificationService notificationService;
-    private final NewsApiService newsApiService;
+    private final RssNewsService rssNewsService;  // Using FREE RSS feeds instead of paid API
 
     // Category emojis for formatting
     private static final Map<String, String> CATEGORY_EMOJIS = new HashMap<>();
@@ -43,10 +43,10 @@ public class AutoNotificationService {
 
     public AutoNotificationService(UserPreferenceClient preferenceClient, 
                                    NotificationService notificationService,
-                                   NewsApiService newsApiService) {
+                                   RssNewsService rssNewsService) {
         this.preferenceClient = preferenceClient;
         this.notificationService = notificationService;
-        this.newsApiService = newsApiService;
+        this.rssNewsService = rssNewsService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -87,13 +87,13 @@ public class AutoNotificationService {
                 return;
             }
 
-            // Fetch news for all categories at once (to minimize API calls)
-            logger.info("Fetching news for categories: {}", allCategories);
-            Map<String, List<NewsApiService.NewsArticle>> newsByCategory = 
-                newsApiService.fetchNewsForCategories(new ArrayList<>(allCategories));
+            // Fetch news for all categories using FREE RSS feeds
+            logger.info("Fetching news from RSS feeds for categories: {}", allCategories);
+            Map<String, List<RssNewsService.NewsArticle>> newsByCategory = 
+                rssNewsService.fetchNewsForCategories(new ArrayList<>(allCategories));
 
             if (newsByCategory.isEmpty()) {
-                logger.warn("No news articles fetched. Skipping notifications.");
+                logger.warn("No news articles fetched from RSS feeds. Skipping notifications.");
                 return;
             }
 
@@ -115,14 +115,14 @@ public class AutoNotificationService {
                     String randomCategory = userPreferences.get(random.nextInt(userPreferences.size())).toUpperCase();
                     
                     // Get news articles for that category
-                    List<NewsApiService.NewsArticle> articles = newsByCategory.get(randomCategory);
+                    List<RssNewsService.NewsArticle> articles = newsByCategory.get(randomCategory);
                     if (articles == null || articles.isEmpty()) {
                         logger.debug("No articles available for category: {} for user: {}", randomCategory, pref.getUserId());
                         continue;
                     }
                     
                     // Pick a random article
-                    NewsApiService.NewsArticle article = articles.get(random.nextInt(articles.size()));
+                    RssNewsService.NewsArticle article = articles.get(random.nextInt(articles.size()));
                     
                     // Create and send notification with real news
                     Notification notification = new Notification();
