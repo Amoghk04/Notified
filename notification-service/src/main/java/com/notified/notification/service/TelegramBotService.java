@@ -33,13 +33,43 @@ public class TelegramBotService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final UserPreferenceClient preferenceClient;
     private final NotificationRepository notificationRepository;
+    private final NewsScraperService newsScraperService;
     
     // Store user states for multi-step flows
     private final Map<String, UserRegistrationState> userStates = new ConcurrentHashMap<>();
+    
+    // Category emojis
+    private static final Map<String, String> CATEGORY_EMOJIS = new HashMap<>();
+    static {
+        CATEGORY_EMOJIS.put("SPORTS", "⚽");
+        CATEGORY_EMOJIS.put("NEWS", "📰");
+        CATEGORY_EMOJIS.put("WEATHER", "🌤️");
+        CATEGORY_EMOJIS.put("SHOPPING", "🛒");
+        CATEGORY_EMOJIS.put("FINANCE", "💰");
+        CATEGORY_EMOJIS.put("ENTERTAINMENT", "🎬");
+        CATEGORY_EMOJIS.put("HEALTH", "🏥");
+        CATEGORY_EMOJIS.put("TECHNOLOGY", "💻");
+        CATEGORY_EMOJIS.put("TRAVEL", "✈️");
+        CATEGORY_EMOJIS.put("SOCIAL", "👥");
+        CATEGORY_EMOJIS.put("EDUCATION", "📚");
+        CATEGORY_EMOJIS.put("PROMOTIONS", "🎁");
+    }
+    
+    // Available category commands
+    private static final Set<String> CATEGORY_COMMANDS = Set.of(
+        "sports", "news", "weather", "shopping", "finance", 
+        "entertainment", "health", "technology", "travel", 
+        "social", "education", "promotions"
+    );
+    
+    private static final int ARTICLES_PER_PAGE = 5;
 
-    public TelegramBotService(UserPreferenceClient preferenceClient, NotificationRepository notificationRepository) {
+    public TelegramBotService(UserPreferenceClient preferenceClient, 
+                              NotificationRepository notificationRepository,
+                              NewsScraperService newsScraperService) {
         this.preferenceClient = preferenceClient;
         this.notificationRepository = notificationRepository;
+        this.newsScraperService = newsScraperService;
     }
     
     /**
@@ -64,6 +94,19 @@ public class TelegramBotService {
             commands.add(Map.of("command", "frequency", "description", "⏰ Change notification frequency"));
             commands.add(Map.of("command", "status", "description", "📊 View your current settings"));
             commands.add(Map.of("command", "history", "description", "📜 View notification history"));
+            commands.add(Map.of("command", "browse", "description", "📚 Browse news by category"));
+            commands.add(Map.of("command", "sports", "description", "⚽ Browse Sports news"));
+            commands.add(Map.of("command", "news", "description", "📰 Browse General news"));
+            commands.add(Map.of("command", "technology", "description", "💻 Browse Technology news"));
+            commands.add(Map.of("command", "entertainment", "description", "🎬 Browse Entertainment news"));
+            commands.add(Map.of("command", "finance", "description", "💰 Browse Finance news"));
+            commands.add(Map.of("command", "health", "description", "🏥 Browse Health news"));
+            commands.add(Map.of("command", "weather", "description", "🌤️ Browse Weather news"));
+            commands.add(Map.of("command", "travel", "description", "✈️ Browse Travel news"));
+            commands.add(Map.of("command", "education", "description", "📚 Browse Education news"));
+            commands.add(Map.of("command", "social", "description", "👥 Browse Social news"));
+            commands.add(Map.of("command", "shopping", "description", "🛒 Browse Shopping news"));
+            commands.add(Map.of("command", "promotions", "description", "🎁 Browse Promotions"));
             commands.add(Map.of("command", "help", "description", "❓ Show help message"));
             
             Map<String, Object> body = new HashMap<>();
@@ -180,6 +223,13 @@ public class TelegramBotService {
                 // Admin command to re-register bot commands
                 registerBotCommands();
                 sendTelegramMessage(chatId, "✅ Bot commands refreshed! Type / to see them.");
+            } else if (text.startsWith("/browse")) {
+                // Show all category options
+                handleBrowseCommand(chatId);
+            } else if (isCategoryCommand(text)) {
+                // Handle category commands like /sports, /news, etc.
+                String category = text.substring(1).toLowerCase().trim();
+                handleCategoryBrowseCommand(chatId, category, 0);
             } else {
                 sendTelegramMessage(chatId, "Unknown command. Type / to see all available commands.");
             }
@@ -203,6 +253,12 @@ public class TelegramBotService {
             // Handle reaction callbacks (like/dislike on news articles)
             if (data.startsWith("reaction_like_") || data.startsWith("reaction_dislike_")) {
                 handleReactionCallback(queryId, data, chatId, message);
+                return;
+            }
+            
+            // Handle pagination callbacks (page_CATEGORY_PAGENUMBER)
+            if (data.startsWith("page_")) {
+                handlePaginationCallback(queryId, data, chatId, message);
                 return;
             }
 
@@ -896,6 +952,198 @@ public class TelegramBotService {
 
         } catch (Exception e) {
             logger.error("Failed to send Telegram message to chatId={}", chatId, e);
+        }
+    }
+
+    // ========== CATEGORY BROWSING METHODS ==========
+
+    private boolean isCategoryCommand(String text) {
+        if (!text.startsWith("/")) return false;
+        String command = text.substring(1).toLowerCase().trim().split("\\s+")[0];
+        return CATEGORY_COMMANDS.contains(command);
+    }
+
+    private void handleBrowseCommand(String chatId) {
+        StringBuilder msg = new StringBuilder();
+        msg.append("📚 *Browse News by Category*\n");
+        msg.append("━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+        msg.append("Tap a category to browse articles:\n\n");
+        
+        for (String category : CATEGORY_COMMANDS) {
+            String emoji = CATEGORY_EMOJIS.getOrDefault(category.toUpperCase(), "📌");
+            msg.append(emoji).append(" /").append(category).append("\n");
+        }
+        
+        msg.append("\n💡 Each category shows the latest articles with pagination.");
+        
+        sendTelegramMessage(chatId, msg.toString());
+    }
+
+    private void handleCategoryBrowseCommand(String chatId, String category, int page) {
+        try {
+            String upperCategory = category.toUpperCase();
+            String emoji = CATEGORY_EMOJIS.getOrDefault(upperCategory, "📌");
+            
+            // Fetch articles for this page
+            List<com.notified.notification.model.NewsArticle> articles = 
+                newsScraperService.getArticlesByCategoryPaginated(category, page, ARTICLES_PER_PAGE);
+            
+            // Get total count for pagination
+            long totalArticles = newsScraperService.countArticlesByCategory(category);
+            int totalPages = (int) Math.ceil((double) totalArticles / ARTICLES_PER_PAGE);
+            
+            if (articles.isEmpty()) {
+                sendTelegramMessage(chatId, emoji + " *" + upperCategory + "*\n\n" +
+                    "No articles found in this category.\n" +
+                    "Try again later or check /browse for other categories.");
+                return;
+            }
+            
+            // Build message with articles
+            StringBuilder msg = new StringBuilder();
+            msg.append(emoji).append(" *").append(upperCategory).append(" News*\n");
+            msg.append("━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            msg.append("📄 Page ").append(page + 1).append(" of ").append(totalPages);
+            msg.append(" (").append(totalArticles).append(" articles)\n\n");
+            
+            int articleNum = page * ARTICLES_PER_PAGE + 1;
+            for (com.notified.notification.model.NewsArticle article : articles) {
+                msg.append(articleNum).append(". ");
+                msg.append("📰 ").append(article.getTitle() != null ? article.getTitle() : "No title").append("\n");
+                
+                if (article.getDescription() != null && !article.getDescription().isEmpty()) {
+                    String desc = article.getDescription();
+                    if (desc.length() > 100) {
+                        desc = desc.substring(0, 100) + "...";
+                    }
+                    msg.append("   ").append(desc).append("\n");
+                }
+                
+                if (article.getLink() != null) {
+                    msg.append("   🔗 ").append(article.getLink()).append("\n");
+                }
+                
+                if (article.getPublishedDate() != null) {
+                    msg.append("   ⏰ ").append(article.getPublishedDate().format(
+                        java.time.format.DateTimeFormatter.ofPattern("MMM dd, HH:mm"))).append("\n");
+                }
+                
+                msg.append("\n");
+                articleNum++;
+            }
+            
+            // Build pagination keyboard
+            List<List<Map<String, String>>> keyboard = new ArrayList<>();
+            List<Map<String, String>> paginationRow = new ArrayList<>();
+            
+            // Previous button
+            if (page > 0) {
+                paginationRow.add(Map.of(
+                    "text", "⬅️ Previous",
+                    "callback_data", "page_" + category + "_" + (page - 1)
+                ));
+            }
+            
+            // Page indicator
+            paginationRow.add(Map.of(
+                "text", "📄 " + (page + 1) + "/" + totalPages,
+                "callback_data", "page_info"
+            ));
+            
+            // Next button
+            if (page < totalPages - 1) {
+                paginationRow.add(Map.of(
+                    "text", "Next ➡️",
+                    "callback_data", "page_" + category + "_" + (page + 1)
+                ));
+            }
+            
+            keyboard.add(paginationRow);
+            
+            // Send message with inline keyboard
+            sendTelegramMessageWithKeyboard(chatId, msg.toString(), keyboard);
+            
+        } catch (Exception e) {
+            logger.error("Error handling category browse command for {}: {}", category, e.getMessage());
+            sendTelegramMessage(chatId, "❌ Error fetching articles. Please try again later.");
+        }
+    }
+
+    private void handlePaginationCallback(String queryId, String data, String chatId, Map<String, Object> message) {
+        try {
+            // data format: page_CATEGORY_PAGENUMBER
+            if (data.equals("page_info")) {
+                answerCallbackQuery(queryId, "Current page");
+                return;
+            }
+            
+            String[] parts = data.split("_");
+            if (parts.length < 3) {
+                answerCallbackQuery(queryId, "Invalid page data");
+                return;
+            }
+            
+            String category = parts[1];
+            int page = Integer.parseInt(parts[2]);
+            
+            answerCallbackQuery(queryId, "Loading page " + (page + 1) + "...");
+            
+            // Delete old message and send new one with updated page
+            deleteMessage(chatId, message.get("message_id"));
+            handleCategoryBrowseCommand(chatId, category, page);
+            
+        } catch (Exception e) {
+            logger.error("Error handling pagination callback: {}", e.getMessage());
+            answerCallbackQuery(queryId, "Error loading page");
+        }
+    }
+
+    private void sendTelegramMessageWithKeyboard(String chatId, String text, List<List<Map<String, String>>> keyboard) {
+        try {
+            String token = getToken();
+            if (token == null) return;
+
+            String url = "https://api.telegram.org/bot" + token + "/sendMessage";
+            
+            Map<String, Object> inlineKeyboard = new HashMap<>();
+            inlineKeyboard.put("inline_keyboard", keyboard);
+            
+            Map<String, Object> body = new HashMap<>();
+            body.put("chat_id", chatId);
+            body.put("text", text);
+            body.put("reply_markup", inlineKeyboard);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            
+            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+            logger.debug("Sent message with keyboard to chatId={} response={}", chatId, response.getStatusCode());
+
+        } catch (Exception e) {
+            logger.error("Failed to send Telegram message with keyboard to chatId={}", chatId, e);
+        }
+    }
+
+    private void deleteMessage(String chatId, Object messageId) {
+        try {
+            String token = getToken();
+            if (token == null) return;
+
+            String url = "https://api.telegram.org/bot" + token + "/deleteMessage";
+            
+            Map<String, Object> body = new HashMap<>();
+            body.put("chat_id", chatId);
+            body.put("message_id", messageId);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            
+            restTemplate.postForEntity(url, entity, String.class);
+            
+        } catch (Exception e) {
+            logger.debug("Could not delete message: {}", e.getMessage());
         }
     }
 }

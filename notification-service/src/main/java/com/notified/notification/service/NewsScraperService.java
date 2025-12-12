@@ -253,4 +253,39 @@ public class NewsScraperService {
             collectionNameProvider.clearCollectionName();
         }
     }
+
+    /**
+     * Get paginated articles for a category (for browsing)
+     * @param category The category name
+     * @param page Page number (0-indexed)
+     * @param pageSize Number of articles per page
+     * @return List of articles for the requested page
+     */
+    public List<NewsArticle> getArticlesByCategoryPaginated(String category, int page, int pageSize) {
+        String collectionName = category.toLowerCase() + "_notifications";
+        collectionNameProvider.setCollectionName(collectionName);
+        
+        try {
+            Pageable pageable = PageRequest.of(page, pageSize);
+            return newsArticleRepository.findByCategoryOrderByPublishedDateDesc(category.toUpperCase(), pageable);
+        } finally {
+            collectionNameProvider.clearCollectionName();
+        }
+    }
+
+    /**
+     * Count total articles in a category
+     * @param category The category name
+     * @return Total number of articles
+     */
+    public long countArticlesByCategory(String category) {
+        String collectionName = category.toLowerCase() + "_notifications";
+        collectionNameProvider.setCollectionName(collectionName);
+        
+        try {
+            return newsArticleRepository.countByCategory(category.toUpperCase());
+        } finally {
+            collectionNameProvider.clearCollectionName();
+        }
+    }
 }
