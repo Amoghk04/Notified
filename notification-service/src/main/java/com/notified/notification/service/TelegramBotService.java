@@ -200,6 +200,12 @@ public class TelegramBotService {
 
             logger.info("Received callback query from chatId={} data={}", chatId, data);
 
+            // Handle reaction callbacks (like/dislike on news articles)
+            if (data.startsWith("reaction_like_") || data.startsWith("reaction_dislike_")) {
+                handleReactionCallback(queryId, data, chatId, message);
+                return;
+            }
+
             UserRegistrationState state = userStates.get(chatId);
             if (state == null) {
                 answerCallbackQuery(queryId, "Session expired. Please start again with /register");
@@ -222,6 +228,94 @@ public class TelegramBotService {
 
         } catch (Exception e) {
             logger.error("Error handling callback query", e);
+        }
+    }
+
+    private void handleReactionCallback(String queryId, String data, String chatId, Map<String, Object> message) {
+        try {
+            String reaction;
+            String notificationId;
+            
+            if (data.startsWith("reaction_like_")) {
+                reaction = "like";
+                notificationId = data.substring("reaction_like_".length());
+            } else {
+                reaction = "dislike";
+                notificationId = data.substring("reaction_dislike_".length());
+            }
+            
+            // Find the notification and update reaction
+            Optional<Notification> notificationOpt = notificationRepository.findById(notificationId);
+            
+            if (notificationOpt.isPresent()) {
+                Notification notification = notificationOpt.get();
+                String previousReaction = notification.getUserReaction();
+                
+                // Toggle: if same reaction clicked again, remove it
+                if (reaction.equals(previousReaction)) {
+                    notification.setUserReaction(null);
+                    notificationRepository.save(notification);
+                    answerCallbackQuery(queryId, "Reaction removed");
+                    updateMessageButtons(chatId, message, null, notificationId);
+                } else {
+                    notification.setUserReaction(reaction);
+                    notificationRepository.save(notification);
+                    
+                    String emoji = reaction.equals("like") ? "👍" : "👎";
+                    answerCallbackQuery(queryId, emoji + " Thanks for your feedback!");
+                    updateMessageButtons(chatId, message, reaction, notificationId);
+                }
+                
+                logger.info("User {} reacted '{}' to notification {}", chatId, reaction, notificationId);
+            } else {
+                answerCallbackQuery(queryId, "Article not found");
+                logger.warn("Notification not found for reaction: {}", notificationId);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error handling reaction callback: {}", e.getMessage());
+            answerCallbackQuery(queryId, "Error processing reaction");
+        }
+    }
+
+    private void updateMessageButtons(String chatId, Map<String, Object> message, String currentReaction, String notificationId) {
+        try {
+            String token = getToken();
+            if (token == null) return;
+            
+            Object messageIdObj = message.get("message_id");
+            if (messageIdObj == null) return;
+            
+            String url = "https://api.telegram.org/bot" + token + "/editMessageReplyMarkup";
+            
+            // Build updated inline keyboard with selected reaction highlighted
+            List<Map<String, String>> row = new ArrayList<>();
+            
+            String likeText = "like".equals(currentReaction) ? "👍 Liked ✓" : "👍 Like";
+            String dislikeText = "dislike".equals(currentReaction) ? "👎 Disliked ✓" : "👎 Dislike";
+            
+            row.add(Map.of("text", likeText, "callback_data", "reaction_like_" + notificationId));
+            row.add(Map.of("text", dislikeText, "callback_data", "reaction_dislike_" + notificationId));
+            
+            List<List<Map<String, String>>> keyboard = new ArrayList<>();
+            keyboard.add(row);
+            
+            Map<String, Object> inlineKeyboard = new HashMap<>();
+            inlineKeyboard.put("inline_keyboard", keyboard);
+            
+            Map<String, Object> body = new HashMap<>();
+            body.put("chat_id", chatId);
+            body.put("message_id", messageIdObj);
+            body.put("reply_markup", inlineKeyboard);
+            
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            org.springframework.http.HttpEntity<Map<String, Object>> entity = new org.springframework.http.HttpEntity<>(body, headers);
+            
+            restTemplate.postForEntity(url, entity, String.class);
+            
+        } catch (Exception e) {
+            logger.error("Error updating message buttons: {}", e.getMessage());
         }
     }
 

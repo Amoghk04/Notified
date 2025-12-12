@@ -30,6 +30,10 @@ public class Notification {
     private LocalDateTime sentAt;
     
     private String articleContentHash; // Hash of the news article to prevent duplicates
+    
+    private Long telegramMessageId; // Telegram message ID for tracking reactions
+    
+    private String userReaction; // User's reaction: "like", "dislike", or null
 
     public enum NotificationChannel {
         EMAIL, WHATSAPP, APP, SMS, TELEGRAM
@@ -123,5 +127,21 @@ public class Notification {
 
     public void setArticleContentHash(String articleContentHash) {
         this.articleContentHash = articleContentHash;
+    }
+
+    public Long getTelegramMessageId() {
+        return telegramMessageId;
+    }
+
+    public void setTelegramMessageId(Long telegramMessageId) {
+        this.telegramMessageId = telegramMessageId;
+    }
+
+    public String getUserReaction() {
+        return userReaction;
+    }
+
+    public void setUserReaction(String userReaction) {
+        this.userReaction = userReaction;
     }
 }

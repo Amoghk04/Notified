@@ -132,7 +132,6 @@ public class AutoNotificationService {
                         logger.debug("User {} has no category preferences set, skipping", pref.getUserId());
                         continue;
                     }
-scrapedAt
                     // Collect top 3 newest articles across all user's categories
                     List<NewsArticle> allArticles = new ArrayList<>();
                     for (String category : userCategories) {
@@ -189,20 +188,24 @@ scrapedAt
                         message.append("📅 Source: ").append(article.getSource());
 
                         notification.setMessage(message.toString());
+                        notification.setStatus(Notification.NotificationStatus.PENDING);
+
+                        // IMPORTANT: Save notification FIRST to get an ID for the reaction buttons
+                        notification = notificationRepository.save(notification);
 
                         try {
                             channelService.sendTelegramNotification(pref, notification);
                             notification.setStatus(Notification.NotificationStatus.SENT);
                             notification.setSentAt(LocalDateTime.now());
+                            // Save again to update status and telegramMessageId
+                            notificationRepository.save(notification);
                             logger.debug("Sent article '{}' to user {}", article.getTitle(), pref.getUserId());
                         } catch (Exception e) {
                             logger.error("Failed to send article '{}' to user {}: {}", 
                                 article.getTitle(), pref.getUserId(), e.getMessage());
                             notification.setStatus(Notification.NotificationStatus.FAILED);
+                            notificationRepository.save(notification);
                         }
-
-                        // Save notification to track sent articles
-                        notificationRepository.save(notification);
                     }
 
                     // Update the last notification timestamp

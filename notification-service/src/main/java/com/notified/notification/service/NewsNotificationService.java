@@ -240,12 +240,18 @@ public class NewsNotificationService {
                     message.append("📅 Source: ").append(article.getSource());
                     
                     notification.setMessage(message.toString());
+                    notification.setStatus(Notification.NotificationStatus.PENDING);
+                    
+                    // IMPORTANT: Save notification FIRST to get an ID for the reaction buttons
+                    notification = notificationRepository.save(notification);
                     
                     try {
                         // Send Telegram only
                         channelService.sendTelegramNotification(userPref, notification);
                         notification.setStatus(Notification.NotificationStatus.SENT);
                         notification.setSentAt(LocalDateTime.now());
+                        // Save again to update status and telegramMessageId
+                        notificationRepository.save(notification);
                         
                         logger.debug("Sent Telegram message for article '{}' to user {}", 
                             article.getTitle(), userPref.getUserId());
@@ -254,10 +260,8 @@ public class NewsNotificationService {
                         logger.error("Failed to send Telegram message for article '{}' to user {}", 
                             article.getTitle(), userPref.getUserId(), e);
                         notification.setStatus(Notification.NotificationStatus.FAILED);
+                        notificationRepository.save(notification);
                     }
-                    
-                    // Save individual notification to user_notifications table (success or failure)
-                    notificationRepository.save(notification);
                 }
             }
         }

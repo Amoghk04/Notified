@@ -14,9 +14,15 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class NotificationChannelService {
@@ -111,11 +117,38 @@ public class NotificationChannelService {
         }
         try {
             String url = "https://api.telegram.org/bot" + token + "/sendMessage";
-            MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
-            params.add("chat_id", chatId);
-            params.add("text", notification.getMessage());
-            ResponseEntity<String> response = restTemplate.postForEntity(url, params, String.class);
-            if (response.getStatusCode() == HttpStatus.OK) {
+            
+            // Build inline keyboard with reaction buttons
+            List<Map<String, String>> row = new ArrayList<>();
+            row.add(Map.of("text", "👍 Like", "callback_data", "reaction_like_" + notification.getId()));
+            row.add(Map.of("text", "👎 Dislike", "callback_data", "reaction_dislike_" + notification.getId()));
+            
+            List<List<Map<String, String>>> keyboard = new ArrayList<>();
+            keyboard.add(row);
+            
+            Map<String, Object> inlineKeyboard = new HashMap<>();
+            inlineKeyboard.put("inline_keyboard", keyboard);
+            
+            // Build request body
+            Map<String, Object> body = new HashMap<>();
+            body.put("chat_id", chatId);
+            body.put("text", notification.getMessage());
+            body.put("reply_markup", inlineKeyboard);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+            
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                // Extract message_id from response
+                Map<String, Object> result = (Map<String, Object>) response.getBody().get("result");
+                if (result != null && result.get("message_id") != null) {
+                    Long messageId = ((Number) result.get("message_id")).longValue();
+                    notification.setTelegramMessageId(messageId);
+                    logger.debug("Captured Telegram message_id={} for notification={}", messageId, notification.getId());
+                }
                 logger.info("notificationId={} userId={} channel=TELEGRAM status=SENT chatId={}",
                         notification.getId(), preference.getUserId(), chatId);
             } else {
