@@ -126,58 +126,109 @@ public class NewsScraperService {
 
     @Scheduled(fixedRateString = "${scraper.schedule.scrape-interval-ms:600000}")
     public void scrapeAllCategories() {
-        logger.info("Starting scheduled news scraping for all categories...");
+        LocalDateTime startTime = LocalDateTime.now();
+        logger.info("═══════════════════════════════════════════════════════════════════");
+        logger.info("🚀 SCRAPING JOB STARTED at {}", startTime);
+        logger.info("═══════════════════════════════════════════════════════════════════");
+        
+        int totalCategories = CATEGORY_FEEDS.size();
+        int successfulCategories = 0;
+        int failedCategories = 0;
+        int totalArticlesScraped = 0;
+        int totalDuplicatesSkipped = 0;
         
         for (String category : CATEGORY_FEEDS.keySet()) {
             try {
-                scrapeCategoryNews(category);
+                logger.info("───────────────────────────────────────────────────────────────────");
+                logger.info("📂 Processing category: {} ({} feeds configured)", 
+                    category, CATEGORY_FEEDS.get(category).size());
+                
+                int[] results = scrapeCategoryNewsWithStats(category);
+                totalArticlesScraped += results[0];
+                totalDuplicatesSkipped += results[1];
+                successfulCategories++;
+                
             } catch (Exception e) {
-                logger.error("Error scraping category: {}", category, e);
+                logger.error("❌ Error scraping category: {} - {}", category, e.getMessage(), e);
+                failedCategories++;
             }
         }
         
-        logger.info("Completed news scraping for all categories");
+        LocalDateTime endTime = LocalDateTime.now();
+        long durationSeconds = java.time.Duration.between(startTime, endTime).getSeconds();
+        
+        logger.info("═══════════════════════════════════════════════════════════════════");
+        logger.info("✅ SCRAPING JOB COMPLETED at {}", endTime);
+        logger.info("📊 SUMMARY:");
+        logger.info("   • Duration: {} seconds", durationSeconds);
+        logger.info("   • Categories processed: {}/{} successful, {} failed", 
+            successfulCategories, totalCategories, failedCategories);
+        logger.info("   • New articles scraped: {}", totalArticlesScraped);
+        logger.info("   • Duplicates skipped: {}", totalDuplicatesSkipped);
+        logger.info("   • Next scrape scheduled in 30 minutes");
+        logger.info("═══════════════════════════════════════════════════════════════════");
     }
 
-    public void scrapeCategoryNews(String category) {
+    /**
+     * Scrape a category and return stats [newArticles, duplicates]
+     */
+    private int[] scrapeCategoryNewsWithStats(String category) {
         String collectionName = category.toLowerCase() + "_notifications";
         collectionNameProvider.setCollectionName(collectionName);
+        
+        int totalScraped = 0;
+        int duplicates = 0;
         
         try {
             List<String> feeds = CATEGORY_FEEDS.get(category);
             if (feeds == null || feeds.isEmpty()) {
-                logger.warn("No feeds configured for category: {}", category);
-                return;
+                logger.warn("⚠️ No feeds configured for category: {}", category);
+                return new int[]{0, 0};
             }
 
-            int totalScraped = 0;
-            int duplicates = 0;
-
             for (String feedUrl : feeds) {
+                logger.debug("   🔗 Fetching feed: {}", feedUrl);
+                long feedStartTime = System.currentTimeMillis();
+                
                 try {
                     List<NewsArticle> articles = fetchArticlesFromFeed(feedUrl, category);
+                    int feedNewArticles = 0;
+                    int feedDuplicates = 0;
                     
                     for (NewsArticle article : articles) {
                         // Check for duplicates
                         if (!newsArticleRepository.existsByContentHash(article.getContentHash())) {
                             newsArticleRepository.save(article);
+                            feedNewArticles++;
                             totalScraped++;
                         } else {
+                            feedDuplicates++;
                             duplicates++;
                         }
                     }
                     
+                    long feedDuration = System.currentTimeMillis() - feedStartTime;
+                    logger.debug("   ✓ Feed completed in {}ms - {} articles fetched, {} new, {} duplicates", 
+                        feedDuration, articles.size(), feedNewArticles, feedDuplicates);
+                    
                 } catch (Exception e) {
-                    logger.warn("Failed to fetch from feed: {} - {}", feedUrl, e.getMessage());
+                    long feedDuration = System.currentTimeMillis() - feedStartTime;
+                    logger.warn("   ✗ Feed FAILED after {}ms: {} - {}", feedDuration, feedUrl, e.getMessage());
                 }
             }
 
-            logger.info("Category: {} - Scraped: {} new articles, Skipped: {} duplicates (Collection: {})",
+            logger.info("📂 Category {} completed: {} new articles, {} duplicates (Collection: {})",
                     category, totalScraped, duplicates, collectionName);
 
         } finally {
             collectionNameProvider.clearCollectionName();
         }
+        
+        return new int[]{totalScraped, duplicates};
+    }
+
+    public void scrapeCategoryNews(String category) {
+        scrapeCategoryNewsWithStats(category);
     }
 
     private List<NewsArticle> fetchArticlesFromFeed(String feedUrl, String category) {
@@ -230,9 +281,16 @@ public class NewsScraperService {
     // Cleanup old articles (runs daily at 2 AM)
     @Scheduled(cron = "${scraper.schedule.cleanup-cron:0 0 2 * * *}")
     public void cleanupOldArticles() {
-        logger.info("Starting cleanup of old news articles...");
+        LocalDateTime startTime = LocalDateTime.now();
+        logger.info("═══════════════════════════════════════════════════════════════════");
+        logger.info("🧹 CLEANUP JOB STARTED at {}", startTime);
+        logger.info("═══════════════════════════════════════════════════════════════════");
         
         LocalDateTime cutoffDate = LocalDateTime.now().minusDays(articleRetentionDays);
+        logger.info("   Removing articles older than: {} ({} days retention)", cutoffDate, articleRetentionDays);
+        
+        int totalDeleted = 0;
+        int categoriesProcessed = 0;
         
         for (String category : CATEGORY_FEEDS.keySet()) {
             String collectionName = category.toLowerCase() + "_notifications";
@@ -240,17 +298,35 @@ public class NewsScraperService {
             
             try {
                 List<NewsArticle> oldArticles = newsArticleRepository.findByScrapedAtBefore(cutoffDate);
-                newsArticleRepository.deleteAll(oldArticles);
-                logger.info("Deleted {} old articles from {} (older than {})", 
-                    oldArticles.size(), collectionName, cutoffDate);
+                int deletedCount = oldArticles.size();
+                
+                if (deletedCount > 0) {
+                    newsArticleRepository.deleteAll(oldArticles);
+                    logger.info("   🗑️ {} - Deleted {} old articles", category, deletedCount);
+                } else {
+                    logger.debug("   ✓ {} - No old articles to delete", category);
+                }
+                
+                totalDeleted += deletedCount;
+                categoriesProcessed++;
+                
             } catch (Exception e) {
-                logger.error("Error cleaning up category: {}", category, e);
+                logger.error("   ❌ Error cleaning up category {}: {}", category, e.getMessage(), e);
             } finally {
                 collectionNameProvider.clearCollectionName();
             }
         }
         
-        logger.info("Completed cleanup of old articles");
+        LocalDateTime endTime = LocalDateTime.now();
+        long durationSeconds = java.time.Duration.between(startTime, endTime).getSeconds();
+        
+        logger.info("═══════════════════════════════════════════════════════════════════");
+        logger.info("✅ CLEANUP JOB COMPLETED at {}", endTime);
+        logger.info("📊 SUMMARY:");
+        logger.info("   • Duration: {} seconds", durationSeconds);
+        logger.info("   • Categories processed: {}", categoriesProcessed);
+        logger.info("   • Total articles deleted: {}", totalDeleted);
+        logger.info("═══════════════════════════════════════════════════════════════════");
     }
 
     public List<NewsArticle> getArticlesByCategory(String category, int limit) {

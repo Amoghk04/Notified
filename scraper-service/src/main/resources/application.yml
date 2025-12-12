@@ -6,7 +6,7 @@ spring:
     name: scraper-service
   data:
     mongodb:
-      uri: ${MONGODB_URI:mongodb+srv://ognotified_db_user:G2cV7IZmlb2cx5QF@ognotified.znqibuc.mongodb.net/notifications_db?retryWrites=true&w=majority&appName=OGNOTIFIED}
+      uri: ${MONGODB_URI:mongodb+srv://ognotified_db_user:G2cV7IZmlb2cx5QF@ognotified.znqibuc.mongodb.net/notifications_db?retryWrites=true&w=majority&appName=OGNOTIFIED&maxIdleTimeMS=60000&maxPoolSize=10&minPoolSize=2&connectTimeoutMS=30000&socketTimeoutMS=60000&serverSelectionTimeoutMS=30000}
 
 eureka:
   client:
@@ -18,9 +18,15 @@ eureka:
 # Scraper configuration
 scraper:
   schedule:
-    # Run scraping every 10 minutes (600,000 ms)
-    scrape-interval-ms: 600000
+    # Run scraping every 30 minutes (1,800,000 ms)
+    scrape-interval-ms: 1800000
     # Cleanup old articles daily at 2 AM
     cleanup-cron: "0 0 2 * * *"
   # Days to keep articles before cleanup
   article-retention-days: 3
+
+logging:
+  level:
+    com.notified.scraper: DEBUG
+    org.springframework.data.mongodb: INFO
+    org.mongodb.driver: WARN
