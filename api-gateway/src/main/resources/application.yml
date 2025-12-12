@@ -49,6 +49,20 @@ spring:
           uri: lb://scraper-service
           predicates:
             - Path=/api/scraper/**
+          filters:
+            - StripPrefix=1
+        - id: admin-notifications-stats
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/admin/notifications/**
+          filters:
+            - RewritePath=/api/admin/notifications/(?<segment>.*), /admin/$\{segment}
+        - id: admin-users-stats
+          uri: lb://user-preference-service
+          predicates:
+            - Path=/api/admin/users/**
+          filters:
+            - RewritePath=/api/admin/users/(?<segment>.*), /admin/$\{segment}
 
 eureka:
   client:

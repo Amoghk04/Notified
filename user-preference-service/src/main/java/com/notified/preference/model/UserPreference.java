@@ -25,6 +25,7 @@ public class UserPreference {
 
     private String phoneNumber;
     private String telegramChatId;
+    private String telegramUsername;
 
     private String preference;
 
@@ -92,6 +93,14 @@ public class UserPreference {
 
     public void setTelegramChatId(String telegramChatId) {
         this.telegramChatId = telegramChatId;
+    }
+
+    public String getTelegramUsername() {
+        return telegramUsername;
+    }
+
+    public void setTelegramUsername(String telegramUsername) {
+        this.telegramUsername = telegramUsername;
     }
 
     public Set<NotificationChannel> getEnabledChannels() {

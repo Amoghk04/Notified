@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.Set;
 
 @RestController
-@RequestMapping("/api/scraper")
+@RequestMapping("/scraper")
 public class ScraperController {
 
     private final NewsScraperService newsScraperService;
