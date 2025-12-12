@@ -1,8 +1,10 @@
 package com.notified.notification.service;
 
 import com.notified.notification.client.UserPreferenceClient;
+import com.notified.notification.model.NewsArticle;
 import com.notified.notification.model.Notification;
 import com.notified.notification.model.UserPreference;
+import com.notified.notification.repository.NotificationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -16,7 +18,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -27,33 +28,21 @@ public class AutoNotificationService {
 
     private final UserPreferenceClient preferenceClient;
     private final NotificationService notificationService;
-    private final RssNewsService rssNewsService;
+    private final NewsScraperService newsScraperService;
+    private final NotificationRepository notificationRepository;
+    private final NotificationChannelService channelService;
     private final RestTemplate restTemplate = new RestTemplate();
-
-    // Category emojis for formatting
-    private static final Map<String, String> CATEGORY_EMOJIS = new HashMap<>();
-
-    static {
-        CATEGORY_EMOJIS.put("SPORTS", "⚽");
-        CATEGORY_EMOJIS.put("NEWS", "📰");
-        CATEGORY_EMOJIS.put("WEATHER", "🌤️");
-        CATEGORY_EMOJIS.put("SHOPPING", "🛒");
-        CATEGORY_EMOJIS.put("FINANCE", "💰");
-        CATEGORY_EMOJIS.put("ENTERTAINMENT", "🎬");
-        CATEGORY_EMOJIS.put("HEALTH", "🏥");
-        CATEGORY_EMOJIS.put("TECHNOLOGY", "💻");
-        CATEGORY_EMOJIS.put("TRAVEL", "✈️");
-        CATEGORY_EMOJIS.put("SOCIAL", "👥");
-        CATEGORY_EMOJIS.put("EDUCATION", "📚");
-        CATEGORY_EMOJIS.put("PROMOTIONS", "🎁");
-    }
 
     public AutoNotificationService(UserPreferenceClient preferenceClient, 
                                    NotificationService notificationService,
-                                   RssNewsService rssNewsService) {
+                                   NewsScraperService newsScraperService,
+                                   NotificationRepository notificationRepository,
+                                   NotificationChannelService channelService) {
         this.preferenceClient = preferenceClient;
         this.notificationService = notificationService;
-        this.rssNewsService = rssNewsService;
+        this.newsScraperService = newsScraperService;
+        this.notificationRepository = notificationRepository;
+        this.channelService = channelService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -130,74 +119,97 @@ public class AutoNotificationService {
 
             logger.info("Found {} users due for notifications out of {} total users", 
                 eligibleUsers.size(), allPreferences.size());
-            
-            // Collect all unique categories from eligible users
-            Set<String> allCategories = new HashSet<>();
-            for (UserPreference pref : eligibleUsers) {
-                if (pref.getPreferences() != null) {
-                    allCategories.addAll(pref.getPreferences());
-                }
-            }
 
-            if (allCategories.isEmpty()) {
-                logger.info("No categories selected by any eligible user. Skipping notifications.");
-                return;
-            }
-
-            // Fetch news for all categories using FREE RSS feeds
-            logger.info("Fetching news from RSS feeds for categories: {}", allCategories);
-            Map<String, List<RssNewsService.NewsArticle>> newsByCategory = 
-                rssNewsService.fetchNewsForCategories(new ArrayList<>(allCategories));
-
-            if (newsByCategory.isEmpty()) {
-                logger.warn("No news articles fetched from RSS feeds. Skipping notifications.");
-                return;
-            }
-
-            Random random = new Random();
             int successCount = 0;
             int failCount = 0;
 
             // Send personalized news to each eligible user
             for (UserPreference pref : eligibleUsers) {
                 try {
-                    List<String> userPreferences = pref.getPreferences();
+                    List<String> userCategories = pref.getPreferences();
                     
-                    if (userPreferences == null || userPreferences.isEmpty()) {
+                    if (userCategories == null || userCategories.isEmpty()) {
                         logger.debug("User {} has no category preferences set, skipping", pref.getUserId());
                         continue;
                     }
+scrapedAt
+                    // Collect top 3 newest articles across all user's categories
+                    List<NewsArticle> allArticles = new ArrayList<>();
+                    for (String category : userCategories) {
+                        try {
+                            // Get latest 3 articles from this category ordered by published date
+                            List<NewsArticle> articles = newsScraperService.getArticlesByCategory(category, 3);
+                            
+                            for (NewsArticle article : articles) {
+                                // Check if this user has already received this article
+                                if (!notificationRepository.existsByUserIdAndArticleContentHash(
+                                        pref.getUserId(), article.getContentHash())) {
+                                    allArticles.add(article);
+                                }
+                            }
+                        } catch (Exception e) {
+                            logger.warn("Error fetching {} news for user {}: {}", category, pref.getUserId(), e.getMessage());
+                        }
+                    }
 
-                    // Pick a random category from user's preferences
-                    String randomCategory = userPreferences.get(random.nextInt(userPreferences.size())).toUpperCase();
-                    
-                    // Get news articles for that category
-                    List<RssNewsService.NewsArticle> articles = newsByCategory.get(randomCategory);
-                    if (articles == null || articles.isEmpty()) {
-                        logger.debug("No articles available for category: {} for user: {}", randomCategory, pref.getUserId());
+                    if (allArticles.isEmpty()) {
+                        logger.debug("No new articles available for user: {}", pref.getUserId());
                         continue;
                     }
-                    
-                    // Pick a random article
-                    RssNewsService.NewsArticle article = articles.get(random.nextInt(articles.size()));
-                    
-                    // Create and send notification with real news
-                    Notification notification = new Notification();
-                    notification.setUserId(pref.getUserId());
-                    
-                    String emoji = CATEGORY_EMOJIS.getOrDefault(randomCategory, "📬");
-                    notification.setSubject(emoji + " " + randomCategory + " News");
-                    notification.setMessage(article.toNotificationMessage() + "\n\n📅 " + 
-                        LocalDateTime.now().format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm")));
-                    
-                    notificationService.sendNotification(notification);
-                    
+
+                    // Sort all articles by publishedDate descending (newest first)
+                    allArticles.sort((a, b) -> {
+                        LocalDateTime dateA = a.getPublishedDate();
+                        LocalDateTime dateB = b.getPublishedDate();
+                        if (dateA == null && dateB == null) return 0;
+                        if (dateA == null) return 1;
+                        if (dateB == null) return -1;
+                        return dateB.compareTo(dateA);
+                    });
+
+                    // Get top 3 most recent articles
+                    int articlesToSend = Math.min(3, allArticles.size());
+                    List<NewsArticle> top3Articles = allArticles.subList(0, articlesToSend);
+
+                    // Send each article as a separate Telegram message (same format as NewsNotificationService)
+                    for (NewsArticle article : top3Articles) {
+                        Notification notification = new Notification();
+                        notification.setUserId(pref.getUserId());
+                        notification.setSubject("📰 " + article.getCategory() + " News: " + article.getTitle());
+                        notification.setArticleContentHash(article.getContentHash());
+                        notification.setChannels(Set.of(Notification.NotificationChannel.TELEGRAM));
+
+                        StringBuilder message = new StringBuilder();
+                        message.append("📌 ").append(article.getCategory().toUpperCase()).append("\n\n");
+                        message.append("📰 ").append(article.getTitle()).append("\n\n");
+                        if (article.getDescription() != null && !article.getDescription().isEmpty()) {
+                            message.append(article.getDescription()).append("\n\n");
+                        }
+                        message.append("🔗 ").append(article.getLink()).append("\n");
+                        message.append("📅 Source: ").append(article.getSource());
+
+                        notification.setMessage(message.toString());
+
+                        try {
+                            channelService.sendTelegramNotification(pref, notification);
+                            notification.setStatus(Notification.NotificationStatus.SENT);
+                            notification.setSentAt(LocalDateTime.now());
+                            logger.debug("Sent article '{}' to user {}", article.getTitle(), pref.getUserId());
+                        } catch (Exception e) {
+                            logger.error("Failed to send article '{}' to user {}: {}", 
+                                article.getTitle(), pref.getUserId(), e.getMessage());
+                            notification.setStatus(Notification.NotificationStatus.FAILED);
+                        }
+
+                        // Save notification to track sent articles
+                        notificationRepository.save(notification);
+                    }
+
                     // Update the last notification timestamp
                     updateLastNotificationSent(pref);
-                    
-                    logger.info("✅ Sent {} news to user: {} (interval: {} mins) - '{}'", 
-                        randomCategory, pref.getUserId(), pref.getNotificationIntervalMinutes(),
-                        article.getTitle() != null ? article.getTitle().substring(0, Math.min(50, article.getTitle().length())) + "..." : "");
+
+                    logger.info("✅ Sent {} news articles to user: {} (interval: {} mins)", 
+                        articlesToSend, pref.getUserId(), pref.getNotificationIntervalMinutes());
                     successCount++;
                     
                 } catch (Exception e) {
@@ -207,7 +219,7 @@ public class AutoNotificationService {
                 }
             }
 
-            logger.info("📊 Automatic notification batch complete: {} sent, {} failed", successCount, failCount);
+            logger.info("📊 Automatic notification batch complete: {} users processed, {} failed", successCount, failCount);
 
         } catch (Exception e) {
             logger.error("Failed to fetch user preferences for automatic notifications: {}", e.getMessage());
