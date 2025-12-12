@@ -25,6 +25,7 @@
         <module>api-gateway</module>
         <module>user-preference-service</module>
         <module>notification-service</module>
+        <module>scraper-service</module>
     </modules>
 
     <properties>

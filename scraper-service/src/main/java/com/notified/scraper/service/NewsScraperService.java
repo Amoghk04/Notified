@@ -1,14 +1,15 @@
-package com.notified.notification.service;
+package com.notified.scraper.service;
 
-import com.notified.notification.config.NewsArticleCollectionNameProvider;
-import com.notified.notification.model.NewsArticle;
-import com.notified.notification.repository.NewsArticleRepository;
+import com.notified.scraper.config.NewsArticleCollectionNameProvider;
+import com.notified.scraper.model.NewsArticle;
+import com.notified.scraper.repository.NewsArticleRepository;
 import com.rometools.rome.feed.synd.SyndEntry;
 import com.rometools.rome.feed.synd.SyndFeed;
 import com.rometools.rome.io.SyndFeedInput;
 import com.rometools.rome.io.XmlReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,6 +27,9 @@ public class NewsScraperService {
 
     private final NewsArticleRepository newsArticleRepository;
     private final NewsArticleCollectionNameProvider collectionNameProvider;
+
+    @Value("${scraper.article-retention-days:3}")
+    private int articleRetentionDays;
 
     // RSS feeds mapped to categories
     private static final Map<String, List<String>> CATEGORY_FEEDS = new HashMap<>();
@@ -113,7 +117,14 @@ public class NewsScraperService {
         this.collectionNameProvider = collectionNameProvider;
     }
 
-    @Scheduled(fixedRate = 600000) // Run every 10 minutes (600,000 ms)
+    /**
+     * Get all available categories
+     */
+    public Set<String> getAvailableCategories() {
+        return CATEGORY_FEEDS.keySet();
+    }
+
+    @Scheduled(fixedRateString = "${scraper.schedule.scrape-interval-ms:600000}")
     public void scrapeAllCategories() {
         logger.info("Starting scheduled news scraping for all categories...");
         
@@ -217,11 +228,11 @@ public class NewsScraperService {
     }
 
     // Cleanup old articles (runs daily at 2 AM)
-    @Scheduled(cron = "0 0 2 * * *")
+    @Scheduled(cron = "${scraper.schedule.cleanup-cron:0 0 2 * * *}")
     public void cleanupOldArticles() {
         logger.info("Starting cleanup of old news articles...");
         
-        LocalDateTime cutoffDate = LocalDateTime.now().minusDays(3);
+        LocalDateTime cutoffDate = LocalDateTime.now().minusDays(articleRetentionDays);
         
         for (String category : CATEGORY_FEEDS.keySet()) {
             String collectionName = category.toLowerCase() + "_notifications";

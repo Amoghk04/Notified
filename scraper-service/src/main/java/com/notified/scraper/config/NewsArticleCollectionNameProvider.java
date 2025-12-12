@@ -1,4 +1,4 @@
-package com.notified.notification.config;
+package com.notified.scraper.config;
 
 import org.springframework.stereotype.Component;
 

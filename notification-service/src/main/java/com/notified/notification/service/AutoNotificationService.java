@@ -28,19 +28,19 @@ public class AutoNotificationService {
 
     private final UserPreferenceClient preferenceClient;
     private final NotificationService notificationService;
-    private final NewsScraperService newsScraperService;
+    private final NewsArticleService newsArticleService;
     private final NotificationRepository notificationRepository;
     private final NotificationChannelService channelService;
     private final RestTemplate restTemplate = new RestTemplate();
 
     public AutoNotificationService(UserPreferenceClient preferenceClient, 
                                    NotificationService notificationService,
-                                   NewsScraperService newsScraperService,
+                                   NewsArticleService newsArticleService,
                                    NotificationRepository notificationRepository,
                                    NotificationChannelService channelService) {
         this.preferenceClient = preferenceClient;
         this.notificationService = notificationService;
-        this.newsScraperService = newsScraperService;
+        this.newsArticleService = newsArticleService;
         this.notificationRepository = notificationRepository;
         this.channelService = channelService;
     }
@@ -137,7 +137,7 @@ public class AutoNotificationService {
                     for (String category : userCategories) {
                         try {
                             // Get latest 3 articles from this category ordered by published date
-                            List<NewsArticle> articles = newsScraperService.getArticlesByCategory(category, 3);
+                            List<NewsArticle> articles = newsArticleService.getArticlesByCategory(category, 3);
                             
                             for (NewsArticle article : articles) {
                                 // Check if this user has already received this article

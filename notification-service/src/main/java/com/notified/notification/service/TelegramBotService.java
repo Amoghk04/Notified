@@ -33,7 +33,7 @@ public class TelegramBotService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final UserPreferenceClient preferenceClient;
     private final NotificationRepository notificationRepository;
-    private final NewsScraperService newsScraperService;
+    private final NewsArticleService newsArticleService;
     
     // Store user states for multi-step flows
     private final Map<String, UserRegistrationState> userStates = new ConcurrentHashMap<>();
@@ -66,10 +66,10 @@ public class TelegramBotService {
 
     public TelegramBotService(UserPreferenceClient preferenceClient, 
                               NotificationRepository notificationRepository,
-                              NewsScraperService newsScraperService) {
+                              NewsArticleService newsArticleService) {
         this.preferenceClient = preferenceClient;
         this.notificationRepository = notificationRepository;
-        this.newsScraperService = newsScraperService;
+        this.newsArticleService = newsArticleService;
     }
     
     /**
@@ -986,10 +986,10 @@ public class TelegramBotService {
             
             // Fetch articles for this page
             List<com.notified.notification.model.NewsArticle> articles = 
-                newsScraperService.getArticlesByCategoryPaginated(category, page, ARTICLES_PER_PAGE);
+                newsArticleService.getArticlesByCategoryPaginated(category, page, ARTICLES_PER_PAGE);
             
             // Get total count for pagination
-            long totalArticles = newsScraperService.countArticlesByCategory(category);
+            long totalArticles = newsArticleService.countArticlesByCategory(category);
             int totalPages = (int) Math.ceil((double) totalArticles / ARTICLES_PER_PAGE);
             
             if (articles.isEmpty()) {

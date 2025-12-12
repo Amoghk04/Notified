@@ -1,13 +1,15 @@
-package com.notified.notification.model;
+package com.notified.scraper.model;
+
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
 
-/**
- * DTO for NewsArticle received from scraper-service.
- * This class no longer stores data directly in MongoDB - scraper-service owns the data.
- */
+@Document(collection = "#{@newsArticleCollectionNameProvider.getCollectionName()}")
 public class NewsArticle {
 
+    @Id
     private String id;
 
     private String category;
@@ -18,6 +20,7 @@ public class NewsArticle {
 
     private String link;
 
+    @Indexed(unique = true)
     private String contentHash;  // Hash of title+link to prevent duplicates
 
     private String source;

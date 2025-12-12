@@ -23,18 +23,18 @@ public class NewsNotificationService {
     private static final Logger logger = LoggerFactory.getLogger(NewsNotificationService.class);
 
     private final UserPreferenceClient preferenceClient;
-    private final NewsScraperService newsScraperService;
+    private final NewsArticleService newsArticleService;
     private final NotificationService notificationService;
     private final NotificationRepository notificationRepository;
     private final NotificationChannelService channelService;
 
     public NewsNotificationService(UserPreferenceClient preferenceClient,
-                                   NewsScraperService newsScraperService,
+                                   NewsArticleService newsArticleService,
                                    NotificationService notificationService,
                                    NotificationRepository notificationRepository,
                                    NotificationChannelService channelService) {
         this.preferenceClient = preferenceClient;
-        this.newsScraperService = newsScraperService;
+        this.newsArticleService = newsArticleService;
         this.notificationService = notificationService;
         this.notificationRepository = notificationRepository;
         this.channelService = channelService;
@@ -82,7 +82,7 @@ public class NewsNotificationService {
         for (String category : userCategories) {
             try {
                 // Get latest 2 articles from this category ordered by published date
-                List<NewsArticle> articles = newsScraperService.getArticlesByCategory(category, 2);
+                List<NewsArticle> articles = newsArticleService.getArticlesByCategory(category, 2);
                 List<NewsArticle> newArticles = new ArrayList<>();
                 
                 for (NewsArticle article : articles) {

@@ -9,7 +9,7 @@ Notified is a microservices-based personalized notification system built with Sp
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                          Client Layer                            │
-│  (Web Apps, Mobile Apps, External Systems, APIs)                │
+│  (Web Apps, Mobile Apps, External Systems, Telegram Bot)        │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
                                 │ HTTP/REST
@@ -19,26 +19,27 @@ Notified is a microservices-based personalized notification system built with Sp
 │  • Single entry point                                            │
 │  • Request routing                                               │
 │  • Load balancing                                                │
-└────────┬──────────────────────────────────────┬─────────────────┘
-         │                                      │
-         │ Routes:                              │ Routes:
-         │ /api/preferences/**                  │ /api/notifications/**
-         │                                      │
-         ▼                                      ▼
-┌──────────────────────────┐          ┌──────────────────────────┐
-│  User Preference Service │          │  Notification Service    │
-│        (8081)            │◄─────────│        (8082)            │
-│                          │  Feign   │                          │
-│  • User preferences      │  Client  │  • Send notifications    │
-│  • Channel settings      │          │  • Email/SMS/App         │
-│  • MongoDB storage       │          │  • MongoDB storage       │
-└──────────┬───────────────┘          └─────────┬────────────────┘
-           │                                    │
-           │ Registers with                     │ Registers with
-           │                                    │
-           └────────────────┬───────────────────┘
-                            │
-                            ▼
+└────────┬──────────────────────┬───────────────────┬─────────────┘
+         │                      │                   │
+         │                      │                   │ Routes:
+         │ Routes:              │ Routes:           │ /api/scraper/**
+         │ /api/preferences/**  │ /api/notifications/**
+         │                      │                   │
+         ▼                      ▼                   ▼
+┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+│  User Preference │   │  Notification    │   │  Scraper Service │
+│  Service (8081)  │◄──│  Service (8082)  │──►│      (8084)      │
+│                  │   │                  │   │                  │
+│• User preferences│   │• Send notifs     │   │• RSS scraping    │
+│• Channel settings│   │• Telegram Bot    │   │• Article storage │
+│• MongoDB storage │   │• Email/SMS       │   │• Scheduled tasks │
+└────────┬─────────┘   └────────┬─────────┘   └────────┬─────────┘
+         │                      │                      │
+         │ Registers with       │ Registers with       │ Registers with
+         │                      │                      │
+         └──────────────────────┼──────────────────────┘
+                                │
+                                ▼
                 ┌───────────────────────┐
                 │  Eureka Server (8761) │
                 │  • Service discovery  │
@@ -92,6 +93,7 @@ Notified is a microservices-based personalized notification system built with Sp
 ```yaml
 /api/preferences/** → user-preference-service
 /api/notifications/** → notification-service
+/api/scraper/** → scraper-service
 ```
 
 **Key Features**:
@@ -183,6 +185,67 @@ Uses OpenFeign to call User Preference Service:
 public interface UserPreferenceClient {
     @GetMapping("/preferences/{userId}")
     UserPreference getUserPreference(@PathVariable String userId);
+}
+```
+
+### 5. Scraper Service (Port 8084)
+
+**Purpose**: Independently scrape RSS feeds and store news articles (separated to prevent interference with notification delivery)
+
+**Responsibilities**:
+- Scrape RSS feeds at scheduled intervals (every 10 minutes)
+- Store articles in MongoDB by category
+- Cleanup old articles (daily at 2 AM)
+- Provide REST API for notification-service to fetch articles
+
+**Technology**: Spring Boot, Spring Data MongoDB, Spring Scheduler, Rome RSS Parser
+
+**Data Model**:
+```java
+NewsArticle {
+    id: String
+    category: String
+    title: String
+    description: String
+    link: String
+    contentHash: String (unique, for deduplication)
+    source: String
+    publishedDate: LocalDateTime
+    scrapedAt: LocalDateTime
+}
+```
+
+**Categories Supported**:
+SPORTS, NEWS, TECHNOLOGY, FINANCE, ENTERTAINMENT, HEALTH, TRAVEL, EDUCATION, WEATHER, SOCIAL, SHOPPING, PROMOTIONS
+
+**API Endpoints**:
+- `GET /api/scraper/categories` - Get available categories
+- `GET /api/scraper/articles/{category}?limit=10` - Get articles by category
+- `GET /api/scraper/articles/{category}/paginated?page=0&pageSize=5` - Paginated articles
+- `GET /api/scraper/articles/{category}/count` - Count articles in category
+- `POST /api/scraper/scrape` - Trigger manual scraping
+- `POST /api/scraper/scrape/{category}` - Trigger scraping for specific category
+- `POST /api/scraper/cleanup` - Trigger manual cleanup
+- `GET /api/scraper/health` - Health check
+
+**Database**: `notifications_db` in MongoDB (collections: `{category}_notifications`)
+
+**Configuration** (application.yml):
+```yaml
+scraper:
+  article-retention-days: 3
+  schedule:
+    scrape-interval-ms: 600000    # 10 minutes
+    cleanup-cron: "0 0 2 * * *"   # 2 AM daily
+```
+
+**Inter-Service Communication**:
+Notification Service uses OpenFeign to call Scraper Service:
+```java
+@FeignClient(name = "scraper-service")
+public interface ScraperClient {
+    @GetMapping("/api/scraper/articles/{category}")
+    List<NewsArticle> getArticlesByCategory(@PathVariable String category, @RequestParam int limit);
 }
 ```
 

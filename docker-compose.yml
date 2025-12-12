@@ -72,6 +72,7 @@ services:
       - "8082:8082"
     depends_on:
       - mongodb
+      - scraper-service
       eureka-server:
         condition: service_healthy
     environment:
@@ -79,6 +80,24 @@ services:
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
       - MAIL_USERNAME=${MAIL_USERNAME:-}
       - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+    networks:
+      - notified-network
+
+  scraper-service:
+    image: scraper-service:latest
+    build:
+      context: ./scraper-service
+      dockerfile: Dockerfile
+    container_name: scraper-service
+    ports:
+      - "8084:8084"
+    depends_on:
+      - mongodb
+      eureka-server:
+        condition: service_healthy
+    environment:
+      - SPRING_DATA_MONGODB_HOST=mongodb
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
     networks:
       - notified-network
 
