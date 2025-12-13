@@ -452,8 +452,7 @@ public class TelegramBotService {
                         // Show updated selection
                         sendCurrentSelection(chatId, state.selectedCategories);
                     } else {
-                        sendTelegramMessage(chatId, "⚠️ Please enter a number between 1 and " + categories.length + 
-                            "\nor type a custom topic name.");
+                        sendTelegramMessage(chatId, "⚠️ Please enter a number between 1 and " + categories.length);
                     }
                 } catch (NumberFormatException e) {
                     // Not a number - treat as custom topic
@@ -692,6 +691,33 @@ public class TelegramBotService {
     }
 
     private void handleRegisterCommand(String chatId) {
+        // Check if this chat ID is already registered
+        try {
+            String apiUrl = "http://localhost:8081/preferences";
+            UserPreference[] allPrefs = restTemplate.getForObject(apiUrl, UserPreference[].class);
+            
+            if (allPrefs != null) {
+                for (UserPreference pref : allPrefs) {
+                    if (chatId.equals(pref.getTelegramChatId())) {
+                        // User is already registered
+                        sendTelegramMessage(chatId, 
+                            "⚠️ You are already registered!\n\n" +
+                            "👤 User ID: " + pref.getUserId() + "\n" +
+                            "📧 Email: " + (pref.getEmail() != null ? pref.getEmail() : "Not set") + "\n" +
+                            "🔔 Categories: " + (pref.getPreferences().isEmpty() ? "None" : String.join(", ", pref.getPreferences())) + "\n\n" +
+                            "Use /updatepref to update your preferences\n" +
+                            "Use /frequency to change notification frequency\n" +
+                            "Use /status to view your current settings");
+                        logger.info("Registration blocked for already registered chatId={}", chatId);
+                        return;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Error checking existing registration for chatId={}: {}", chatId, e.getMessage());
+        }
+        
+        // Not registered yet, proceed with registration
         UserRegistrationState state = new UserRegistrationState();
         state.waitingForUserId = true;
         userStates.put(chatId, state);

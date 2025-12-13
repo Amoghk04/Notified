@@ -57,6 +57,12 @@ spring:
             - Path=/api/admin/notifications/**
           filters:
             - RewritePath=/api/admin/notifications/(?<segment>.*), /admin/$\{segment}
+        - id: admin-broadcast
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/admin/broadcast/**
+          filters:
+            - StripPrefix=1
         - id: admin-users-stats
           uri: lb://user-preference-service
           predicates:

@@ -34,9 +34,3 @@ telegram:
   bot-token: 8502350218:AAEfNrL4qshYqu00sW2UiTGqIu_CgN_qprg
   polling:
     enabled: true
-
-# News API configuration
-news:
-  api:
-    token: ${NEWS_API_TOKEN:KSPQ9Y8oPUK1gKlOaVJIMjb6GGF5acsASUABdhjs}
-    base-url: https://api.thenewsapi.com/v1/news/all

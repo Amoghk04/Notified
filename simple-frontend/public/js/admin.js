@@ -55,6 +55,7 @@ function showSection(sectionId) {
         'overview': 'Overview',
         'users': 'User Management',
         'notifications': 'Notifications',
+        'broadcast': 'Admin Broadcast',
         'scraper': 'News Scraper',
         'activity': 'Activity Log'
     };
@@ -303,11 +304,18 @@ function filterUsers() {
 }
 
 // Trigger Scraping
-async function triggerScraping() {
+async function triggerScraping(btn) {
+    // Handle both button element and event
+    if (btn && btn.target) btn = btn.target;
+    if (!btn) btn = document.querySelector('.btn-primary[onclick*="triggerScraping"]');
+    
+    const originalText = btn ? btn.textContent : '';
+    
     try {
-        const btn = event.target;
-        btn.disabled = true;
-        btn.textContent = '⏳ Scraping...';
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '⏳ Scraping...';
+        }
         
         const response = await fetch('/api/scraper/scrape', { method: 'POST' });
         
@@ -320,8 +328,10 @@ async function triggerScraping() {
         console.error('Error triggering scraping:', error);
         alert('Error: ' + error.message);
     } finally {
-        event.target.disabled = false;
-        event.target.textContent = '▶️ Trigger Scraping';
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = originalText || '▶️ Trigger Scraping';
+        }
     }
 }
 
@@ -520,3 +530,181 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// Broadcast Functions
+function toggleUserSelection() {
+    const type = document.getElementById('broadcast-type').value;
+    const container = document.getElementById('user-selection-container');
+    
+    if (type === 'selected') {
+        container.style.display = 'block';
+        loadUsersForSelection();
+    } else {
+        container.style.display = 'none';
+    }
+}
+
+// Store users data for broadcast filtering
+let broadcastUsersData = [];
+
+async function loadUsersForSelection() {
+    try {
+        const response = await fetch('/api/admin/users/stats/users/list');
+        if (!response.ok) throw new Error('Failed to load users');
+        
+        broadcastUsersData = await response.json();
+        renderUserSelectionList(broadcastUsersData);
+        
+    } catch (error) {
+        console.error('Error loading users for selection:', error);
+        document.getElementById('user-selection-list').innerHTML = 
+            '<p class="loading">Failed to load users</p>';
+    }
+}
+
+function renderUserSelectionList(users) {
+    const container = document.getElementById('user-selection-list');
+    
+    if (users.length === 0) {
+        container.innerHTML = '<p class="loading">No users found</p>';
+        return;
+    }
+    
+    container.innerHTML = users.map(user => `
+        <label class="user-checkbox">
+            <input type="checkbox" value="${escapeHtml(user.userId)}" class="user-select-checkbox">
+            <span class="user-info">
+                <strong>${escapeHtml(user.userId)}</strong>
+                <span class="user-channels">
+                    ${user.email ? '📧' : ''}
+                    ${user.hasTelegram ? '📱' : ''}
+                </span>
+            </span>
+        </label>
+    `).join('');
+}
+
+function filterBroadcastUsers() {
+    const searchTerm = document.getElementById('broadcast-user-search').value.toLowerCase().trim();
+    
+    if (!searchTerm) {
+        renderUserSelectionList(broadcastUsersData);
+        return;
+    }
+    
+    const filtered = broadcastUsersData.filter(user => 
+        user.userId?.toLowerCase().includes(searchTerm) ||
+        user.email?.toLowerCase().includes(searchTerm) ||
+        user.telegramUsername?.toLowerCase().includes(searchTerm)
+    );
+    
+    renderUserSelectionList(filtered);
+}
+
+function selectAllFilteredUsers() {
+    const checkboxes = document.querySelectorAll('.user-select-checkbox');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => cb.checked = !allChecked);
+}
+
+async function sendBroadcast(btn) {
+    // Handle both button element and event
+    if (btn && btn.target) btn = btn.target;
+    if (!btn) btn = document.querySelector('.btn-primary[onclick*="sendBroadcast"]');
+    
+    const originalText = btn ? btn.textContent : '📤 Send Broadcast';
+    
+    const type = document.getElementById('broadcast-type').value;
+    const subject = document.getElementById('broadcast-subject').value.trim();
+    const message = document.getElementById('broadcast-message').value.trim();
+    
+    if (!message) {
+        alert('Please enter a message to broadcast');
+        return;
+    }
+    
+    let endpoint = '/api/admin/broadcast/all';
+    let body = { subject, message };
+    
+    if (type === 'selected') {
+        const checkboxes = document.querySelectorAll('.user-select-checkbox:checked');
+        const selectedUserIds = Array.from(checkboxes).map(cb => cb.value);
+        
+        if (selectedUserIds.length === 0) {
+            alert('Please select at least one user');
+            return;
+        }
+        
+        endpoint = '/api/admin/broadcast/selected';
+        body.userIds = selectedUserIds;
+    }
+    
+    // Confirm before sending
+    const confirmMsg = type === 'all' 
+        ? 'Are you sure you want to broadcast this message to ALL users?' 
+        : `Are you sure you want to send this message to ${body.userIds?.length || 0} selected users?`;
+    
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '⏳ Sending...';
+        }
+        
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to send broadcast');
+        }
+        
+        const result = await response.json();
+        
+        alert(`Broadcast sent successfully!\n\n` +
+            `📊 Results:\n` +
+            `• Total users: ${result.totalUsers}\n` +
+            `• Email: ${result.email?.success || 0} sent, ${result.email?.failed || 0} failed\n` +
+            `• Telegram: ${result.telegram?.success || 0} sent, ${result.telegram?.failed || 0} failed`);
+        
+        // Clear form
+        document.getElementById('broadcast-subject').value = '';
+        document.getElementById('broadcast-message').value = '';
+        updateBroadcastPreview();
+        
+    } catch (error) {
+        console.error('Error sending broadcast:', error);
+        alert('Error: ' + error.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+}
+
+function updateBroadcastPreview() {
+    const subject = document.getElementById('broadcast-subject').value || 'Subject will appear here';
+    const message = document.getElementById('broadcast-message').value || 'Message content will appear here...';
+    
+    document.getElementById('preview-subject').textContent = subject;
+    document.getElementById('preview-message').textContent = message;
+}
+
+// Add event listeners for live preview
+document.addEventListener('DOMContentLoaded', () => {
+    const subjectInput = document.getElementById('broadcast-subject');
+    const messageInput = document.getElementById('broadcast-message');
+    
+    if (subjectInput) {
+        subjectInput.addEventListener('input', updateBroadcastPreview);
+    }
+    if (messageInput) {
+        messageInput.addEventListener('input', updateBroadcastPreview);
+    }
+});

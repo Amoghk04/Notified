@@ -170,13 +170,27 @@ public class AutoNotificationService {
                     int articlesToSend = Math.min(3, allArticles.size());
                     List<NewsArticle> top3Articles = allArticles.subList(0, articlesToSend);
 
-                    // Send each article as a separate Telegram message (same format as NewsNotificationService)
+                    // Generate a batch ID for this notification batch
+                    String batchId = java.util.UUID.randomUUID().toString().substring(0, 8);
+
+                    // Send consolidated EMAIL first (single email with all articles)
+                    if (pref.isEmailEnabled()) {
+                        try {
+                            channelService.sendConsolidatedEmailNotification(pref, top3Articles, batchId);
+                            logger.info("Sent consolidated email with {} articles to user {}", 
+                                articlesToSend, pref.getUserId());
+                        } catch (Exception ex) {
+                            logger.warn("Consolidated email failed for userId={} batchId={} error={}", 
+                                pref.getUserId(), batchId, ex.getMessage());
+                        }
+                    }
+
+                    // Send each article as a separate TELEGRAM message (for reaction buttons)
                     for (NewsArticle article : top3Articles) {
                         Notification notification = new Notification();
                         notification.setUserId(pref.getUserId());
                         notification.setSubject("📰 " + article.getCategory() + " News: " + article.getTitle());
                         notification.setArticleContentHash(article.getContentHash());
-                        notification.setChannels(Set.of(Notification.NotificationChannel.TELEGRAM));
 
                         StringBuilder message = new StringBuilder();
                         message.append("📌 ").append(article.getCategory().toUpperCase()).append("\n\n");
@@ -193,8 +207,39 @@ public class AutoNotificationService {
                         // IMPORTANT: Save notification FIRST to get an ID for the reaction buttons
                         notification = notificationRepository.save(notification);
 
+                        // Send via Telegram (each article separate for reaction buttons)
                         try {
-                            channelService.sendTelegramNotification(pref, notification);
+                            if (pref.isTelegramEnabled()) {
+                                try {
+                                    channelService.sendTelegramNotification(pref, notification);
+                                } catch (Exception ex) {
+                                    logger.warn("Telegram channel failed for userId={} notificationId={} error={}", 
+                                        pref.getUserId(), notification.getId(), ex.getMessage());
+                                }
+                            }
+                            
+                            if (pref.isWhatsappEnabled()) {
+                                try {
+                                    channelService.sendWhatsappNotification(pref, notification);
+                                } catch (Exception ex) {
+                                    logger.warn("WhatsApp channel failed for userId={} notificationId={} error={}", 
+                                        pref.getUserId(), notification.getId(), ex.getMessage());
+                                }
+                            }
+                            
+                            if (pref.isAppEnabled()) {
+                                channelService.sendAppNotification(pref, notification);
+                            }
+                            
+                            // Set channels from preference
+                            if (pref.getEnabledChannels() != null) {
+                                Set<Notification.NotificationChannel> channels =
+                                        pref.getEnabledChannels().stream()
+                                                .map(c -> Notification.NotificationChannel.valueOf(c.name()))
+                                                .collect(java.util.stream.Collectors.toSet());
+                                notification.setChannels(channels);
+                            }
+                            
                             notification.setStatus(Notification.NotificationStatus.SENT);
                             notification.setSentAt(LocalDateTime.now());
                             // Save again to update status and telegramMessageId

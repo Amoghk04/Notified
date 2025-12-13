@@ -17,25 +17,25 @@ public interface ScraperClient {
     /**
      * Get available categories
      */
-    @GetMapping("/api/scraper/categories")
+    @GetMapping("/scraper/categories")
     Set<String> getCategories();
 
     /**
      * Trigger scraping for all categories
      */
-    @PostMapping("/api/scraper/scrape")
+    @PostMapping("/scraper/scrape")
     Map<String, String> triggerScraping();
 
     /**
      * Trigger scraping for a specific category
      */
-    @PostMapping("/api/scraper/scrape/{category}")
+    @PostMapping("/scraper/scrape/{category}")
     Map<String, String> scrapeCategoryNews(@PathVariable("category") String category);
 
     /**
      * Get articles by category with optional limit
      */
-    @GetMapping("/api/scraper/articles/{category}")
+    @GetMapping("/scraper/articles/{category}")
     List<NewsArticle> getArticlesByCategory(
             @PathVariable("category") String category,
             @RequestParam(value = "limit", defaultValue = "10") int limit);
@@ -43,7 +43,7 @@ public interface ScraperClient {
     /**
      * Get paginated articles by category
      */
-    @GetMapping("/api/scraper/articles/{category}/paginated")
+    @GetMapping("/scraper/articles/{category}/paginated")
     Map<String, Object> getArticlesPaginated(
             @PathVariable("category") String category,
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -52,18 +52,18 @@ public interface ScraperClient {
     /**
      * Count articles in a category
      */
-    @GetMapping("/api/scraper/articles/{category}/count")
+    @GetMapping("/scraper/articles/{category}/count")
     Map<String, Object> countArticles(@PathVariable("category") String category);
 
     /**
      * Trigger cleanup of old articles
      */
-    @PostMapping("/api/scraper/cleanup")
+    @PostMapping("/scraper/cleanup")
     Map<String, String> triggerCleanup();
 
     /**
      * Health check
      */
-    @GetMapping("/api/scraper/health")
+    @GetMapping("/scraper/health")
     Map<String, String> health();
 }

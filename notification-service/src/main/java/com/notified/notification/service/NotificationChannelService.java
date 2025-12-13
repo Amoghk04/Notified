@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.notified.notification.model.NewsArticle;
 
 @Service
 public class NotificationChannelService {
@@ -159,6 +160,125 @@ public class NotificationChannelService {
         } catch (Exception e) {
             logger.error("notificationId={} userId={} channel=TELEGRAM status=FAILED chatId={} error={}",
                     notification.getId(), preference.getUserId(), chatId, e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Send a consolidated email with multiple articles in a single email
+     */
+    public void sendConsolidatedEmailNotification(UserPreference preference, List<NewsArticle> articles, String batchId) {
+        String email = preference.getEmail();
+        if (email == null || email.isEmpty()) {
+            logger.warn("Skipping consolidated email: no email configured for userId={}", preference.getUserId());
+            return;
+        }
+        if (articles == null || articles.isEmpty()) {
+            logger.warn("Skipping consolidated email: no articles for userId={}", preference.getUserId());
+            return;
+        }
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(email);
+            message.setSubject("📰 Your News Digest - " + articles.size() + " New Articles");
+            
+            StringBuilder body = new StringBuilder();
+            body.append("Hello ").append(preference.getUserId()).append("!\n\n");
+            body.append("Here are your latest news updates:\n");
+            body.append("═══════════════════════════════════════\n\n");
+            
+            int articleNum = 1;
+            for (NewsArticle article : articles) {
+                body.append("📌 ").append(articleNum++).append(". ").append(article.getCategory().toUpperCase()).append("\n");
+                body.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+                body.append("📰 ").append(article.getTitle()).append("\n\n");
+                if (article.getDescription() != null && !article.getDescription().isEmpty()) {
+                    body.append(article.getDescription()).append("\n\n");
+                }
+                body.append("🔗 Read more: ").append(article.getLink()).append("\n");
+                body.append("📅 Source: ").append(article.getSource()).append("\n\n");
+            }
+            
+            body.append("═══════════════════════════════════════\n");
+            body.append("\nThank you for using Notified!\n");
+            body.append("Manage your preferences via Telegram: /updatepref\n");
+            
+            message.setText(body.toString());
+            mailSender.send(message);
+            logger.info("batchId={} userId={} channel=EMAIL status=SENT articles={} to={}", 
+                batchId, preference.getUserId(), articles.size(), email);
+        } catch (MailException e) {
+            logger.error("batchId={} userId={} channel=EMAIL status=FAILED to={} mailError={}", 
+                batchId, preference.getUserId(), email, e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            logger.error("batchId={} userId={} channel=EMAIL status=FAILED to={} unexpectedError", 
+                batchId, preference.getUserId(), email, e);
+            throw e;
+        }
+    }
+
+    /**
+     * Send a custom admin broadcast message via email
+     */
+    public void sendAdminBroadcastEmail(UserPreference preference, String subject, String messageText) {
+        String email = preference.getEmail();
+        if (email == null || email.isEmpty()) {
+            logger.warn("Skipping admin broadcast email: no email configured for userId={}", preference.getUserId());
+            return;
+        }
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(email);
+            message.setSubject(subject != null ? subject : "📢 Admin Broadcast");
+            message.setText(messageText);
+            mailSender.send(message);
+            logger.info("userId={} channel=EMAIL status=SENT type=ADMIN_BROADCAST to={}", preference.getUserId(), email);
+        } catch (Exception e) {
+            logger.error("userId={} channel=EMAIL status=FAILED type=ADMIN_BROADCAST to={} error={}", 
+                preference.getUserId(), email, e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Send a custom admin broadcast message via Telegram
+     */
+    public void sendAdminBroadcastTelegram(UserPreference preference, String messageText) {
+        String token = (telegramBotToken != null && !telegramBotToken.isBlank())
+                ? telegramBotToken
+                : System.getenv("TELEGRAM_BOT_TOKEN");
+        if (token == null || token.isBlank()) {
+            logger.warn("Skipping admin broadcast Telegram: no bot token configured");
+            return;
+        }
+        String chatId = preference.getTelegramChatId();
+        if (chatId == null || chatId.isBlank()) {
+            logger.warn("Skipping admin broadcast Telegram: no telegramChatId for userId={}", preference.getUserId());
+            return;
+        }
+        try {
+            String url = "https://api.telegram.org/bot" + token + "/sendMessage";
+            
+            Map<String, Object> body = new HashMap<>();
+            body.put("chat_id", chatId);
+            body.put("text", "📢 ADMIN BROADCAST\n\n" + messageText);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+            
+            if (response.getStatusCode() == HttpStatus.OK) {
+                logger.info("userId={} channel=TELEGRAM status=SENT type=ADMIN_BROADCAST chatId={}", 
+                    preference.getUserId(), chatId);
+            } else {
+                throw new RuntimeException("Telegram API error: " + response.getStatusCode());
+            }
+        } catch (Exception e) {
+            logger.error("userId={} channel=TELEGRAM status=FAILED type=ADMIN_BROADCAST chatId={} error={}", 
+                preference.getUserId(), chatId, e.getMessage());
             throw e;
         }
     }
