@@ -34,6 +34,7 @@ public class TelegramBotService {
     private final UserPreferenceClient preferenceClient;
     private final NotificationRepository notificationRepository;
     private final NewsArticleService newsArticleService;
+    private final RecommenderService recommenderService;
     
     // Store user states for multi-step flows
     private final Map<String, UserRegistrationState> userStates = new ConcurrentHashMap<>();
@@ -66,10 +67,12 @@ public class TelegramBotService {
 
     public TelegramBotService(UserPreferenceClient preferenceClient, 
                               NotificationRepository notificationRepository,
-                              NewsArticleService newsArticleService) {
+                              NewsArticleService newsArticleService,
+                              RecommenderService recommenderService) {
         this.preferenceClient = preferenceClient;
         this.notificationRepository = notificationRepository;
         this.newsArticleService = newsArticleService;
+        this.recommenderService = recommenderService;
     }
     
     /**
@@ -107,6 +110,8 @@ public class TelegramBotService {
             commands.add(Map.of("command", "social", "description", "👥 Browse Social news"));
             commands.add(Map.of("command", "shopping", "description", "🛒 Browse Shopping news"));
             commands.add(Map.of("command", "promotions", "description", "🎁 Browse Promotions"));
+            commands.add(Map.of("command", "myprofile", "description", "📈 View your recommendation profile"));
+            commands.add(Map.of("command", "recommend", "description", "🎯 Get personalized recommendations"));
             commands.add(Map.of("command", "help", "description", "❓ Show help message"));
             
             Map<String, Object> body = new HashMap<>();
@@ -217,6 +222,10 @@ public class TelegramBotService {
                 handleFrequencyCommand(chatId);
             } else if (text.startsWith("/status")) {
                 handleStatusCommand(chatId);
+            } else if (text.startsWith("/myprofile") || text.startsWith("/profile")) {
+                handleMyProfileCommand(chatId);
+            } else if (text.startsWith("/recommend")) {
+                handleRecommendCommand(chatId);
             } else if (text.startsWith("/help")) {
                 handleHelpCommand(chatId);
             } else if (text.startsWith("/refreshcommands")) {
@@ -317,6 +326,26 @@ public class TelegramBotService {
                     notification.setUserReaction(reaction);
                     notificationRepository.save(notification);
                     
+                    // Record reaction in the recommender system for personalization
+                    try {
+                        // Extract category, source, and title from the notification message
+                        String notificationMessage = notification.getMessage();
+                        String category = extractCategoryFromMessage(notificationMessage);
+                        String source = extractSourceFromMessage(notificationMessage);
+                        String title = extractTitleFromMessage(notificationMessage);
+                        
+                        recommenderService.recordReaction(
+                                notification.getUserId(),
+                                reaction,
+                                category,
+                                source,
+                                title
+                        );
+                        logger.info("Recorded reaction in recommender system for user {}", notification.getUserId());
+                    } catch (Exception e) {
+                        logger.warn("Failed to record reaction in recommender system: {}", e.getMessage());
+                    }
+                    
                     String emoji = reaction.equals("like") ? "👍" : "👎";
                     answerCallbackQuery(queryId, emoji + " Thanks for your feedback!");
                     updateMessageButtons(chatId, message, reaction, notificationId);
@@ -332,6 +361,61 @@ public class TelegramBotService {
             logger.error("Error handling reaction callback: {}", e.getMessage());
             answerCallbackQuery(queryId, "Error processing reaction");
         }
+    }
+    
+    /**
+     * Extract category from notification message (format: "📌 CATEGORY\n\n...")
+     */
+    private String extractCategoryFromMessage(String message) {
+        if (message == null) return null;
+        try {
+            // Look for pattern "📌 CATEGORY" at the start
+            if (message.startsWith("📌 ")) {
+                int endIndex = message.indexOf("\n");
+                if (endIndex > 0) {
+                    return message.substring(3, endIndex).trim();
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not extract category from message");
+        }
+        return null;
+    }
+    
+    /**
+     * Extract source from notification message (format: "...📅 Source: SOURCE_NAME")
+     */
+    private String extractSourceFromMessage(String message) {
+        if (message == null) return null;
+        try {
+            int sourceIndex = message.indexOf("📅 Source: ");
+            if (sourceIndex >= 0) {
+                String sourcePart = message.substring(sourceIndex + 11);
+                int endIndex = sourcePart.indexOf("\n");
+                return endIndex > 0 ? sourcePart.substring(0, endIndex).trim() : sourcePart.trim();
+            }
+        } catch (Exception e) {
+            logger.debug("Could not extract source from message");
+        }
+        return null;
+    }
+    
+    /**
+     * Extract title from notification message (format: "...📰 TITLE\n\n...")
+     */
+    private String extractTitleFromMessage(String message) {
+        if (message == null) return null;
+        try {
+            int titleIndex = message.indexOf("📰 ");
+            if (titleIndex >= 0) {
+                String titlePart = message.substring(titleIndex + 3);
+                int endIndex = titlePart.indexOf("\n");
+                return endIndex > 0 ? titlePart.substring(0, endIndex).trim() : titlePart.trim();
+            }
+        } catch (Exception e) {
+            logger.debug("Could not extract title from message");
+        }
+        return null;
     }
 
     private void updateMessageButtons(String chatId, Map<String, Object> message, String currentReaction, String notificationId) {
@@ -908,6 +992,221 @@ public class TelegramBotService {
         } catch (Exception e) {
             logger.error("Error handling /status for chatId={}", chatId, e);
             sendTelegramMessage(chatId, "❌ Failed to load status. Please try again later.");
+        }
+    }
+    
+    private void handleMyProfileCommand(String chatId) {
+        try {
+            // Find user by telegram chat ID
+            String apiUrl = "http://localhost:8081/preferences";
+            UserPreference[] allPrefs = restTemplate.getForObject(apiUrl, UserPreference[].class);
+            
+            UserPreference userPref = null;
+            if (allPrefs != null) {
+                for (UserPreference pref : allPrefs) {
+                    if (chatId.equals(pref.getTelegramChatId())) {
+                        userPref = pref;
+                        break;
+                    }
+                }
+            }
+
+            if (userPref == null) {
+                sendTelegramMessage(chatId, "You're not registered yet. Use /register to get started!");
+                return;
+            }
+
+            // Get user's preference profile from recommender service
+            Map<String, Object> profile = recommenderService.getUserPreferenceSummary(userPref.getUserId());
+            
+            StringBuilder msg = new StringBuilder();
+            msg.append("🧠 *Your Personalized Profile*\n\n");
+            
+            if ("no_data".equals(profile.get("status"))) {
+                msg.append("📊 No preference data yet!\n\n");
+                msg.append("React to articles with 👍 or 👎 to build your profile.\n");
+                msg.append("The more you react, the better your recommendations!\n");
+            } else {
+                int likes = (Integer) profile.getOrDefault("totalLikes", 0);
+                int dislikes = (Integer) profile.getOrDefault("totalDislikes", 0);
+                
+                msg.append(String.format("📈 Total Reactions: %d likes, %d dislikes\n\n", likes, dislikes));
+                
+                // Top categories
+                @SuppressWarnings("unchecked")
+                Map<String, Double> topCategories = (Map<String, Double>) profile.get("topCategories");
+                if (topCategories != null && !topCategories.isEmpty()) {
+                    msg.append("✅ *Preferred Categories:*\n");
+                    for (Map.Entry<String, Double> entry : topCategories.entrySet()) {
+                        String emoji = CATEGORY_EMOJIS.getOrDefault(entry.getKey(), "📌");
+                        msg.append(String.format("  %s %s (%.1f)\n", emoji, entry.getKey(), entry.getValue()));
+                    }
+                    msg.append("\n");
+                }
+                
+                // Least preferred categories
+                @SuppressWarnings("unchecked")
+                Map<String, Double> leastCategories = (Map<String, Double>) profile.get("leastPreferredCategories");
+                if (leastCategories != null && !leastCategories.isEmpty()) {
+                    msg.append("❌ *Less Interested In:*\n");
+                    for (Map.Entry<String, Double> entry : leastCategories.entrySet()) {
+                        msg.append(String.format("  📉 %s (%.1f)\n", entry.getKey(), entry.getValue()));
+                    }
+                    msg.append("\n");
+                }
+                
+                // Top keywords
+                @SuppressWarnings("unchecked")
+                Map<String, Double> topKeywords = (Map<String, Double>) profile.get("topKeywords");
+                if (topKeywords != null && !topKeywords.isEmpty()) {
+                    msg.append("🔤 *Top Keywords:*\n");
+                    int count = 0;
+                    for (Map.Entry<String, Double> entry : topKeywords.entrySet()) {
+                        if (count++ >= 5) break;
+                        msg.append(String.format("  • %s\n", entry.getKey()));
+                    }
+                    msg.append("\n");
+                }
+                
+                // Top sources
+                @SuppressWarnings("unchecked")
+                Map<String, Double> topSources = (Map<String, Double>) profile.get("topSources");
+                if (topSources != null && !topSources.isEmpty()) {
+                    msg.append("📰 *Preferred Sources:*\n");
+                    int count = 0;
+                    for (Map.Entry<String, Double> entry : topSources.entrySet()) {
+                        if (count++ >= 3) break;
+                        msg.append(String.format("  • %s\n", entry.getKey()));
+                    }
+                }
+            }
+            
+            msg.append("\n💡 Use /recommend to get personalized news!");
+            
+            sendTelegramMessage(chatId, msg.toString());
+
+        } catch (Exception e) {
+            logger.error("Error handling /myprofile for chatId={}", chatId, e);
+            sendTelegramMessage(chatId, "❌ Failed to load profile. Please try again later.");
+        }
+    }
+    
+    private void handleRecommendCommand(String chatId) {
+        try {
+            // Find user by telegram chat ID
+            String apiUrl = "http://localhost:8081/preferences";
+            UserPreference[] allPrefs = restTemplate.getForObject(apiUrl, UserPreference[].class);
+            
+            UserPreference userPref = null;
+            if (allPrefs != null) {
+                for (UserPreference pref : allPrefs) {
+                    if (chatId.equals(pref.getTelegramChatId())) {
+                        userPref = pref;
+                        break;
+                    }
+                }
+            }
+
+            if (userPref == null) {
+                sendTelegramMessage(chatId, "You're not registered yet. Use /register to get started!");
+                return;
+            }
+
+            List<String> categories = userPref.getPreferences();
+            if (categories == null || categories.isEmpty()) {
+                sendTelegramMessage(chatId, "Please set up your category preferences first using /updatepref");
+                return;
+            }
+
+            // Get personalized recommendations
+            List<RecommenderService.ScoredArticle> recommendations = 
+                    recommenderService.getRecommendations(userPref.getUserId(), categories, 3);
+
+            if (recommendations.isEmpty()) {
+                sendTelegramMessage(chatId, "No new recommendations available right now. Check back later! 📭");
+                return;
+            }
+
+            sendTelegramMessage(chatId, "🎯 *Personalized Recommendations for You:*\n");
+
+            // Send each recommendation as a separate message with reaction buttons
+            for (RecommenderService.ScoredArticle scored : recommendations) {
+                com.notified.notification.model.NewsArticle article = scored.getArticle();
+                
+                // Create notification to track reaction
+                Notification notification = new Notification();
+                notification.setUserId(userPref.getUserId());
+                notification.setSubject("🎯 Recommended: " + article.getTitle());
+                notification.setArticleContentHash(article.getContentHash());
+                notification.setChannels(Set.of(Notification.NotificationChannel.TELEGRAM));
+
+                StringBuilder message = new StringBuilder();
+                message.append("📌 ").append(article.getCategory().toUpperCase()).append("\n\n");
+                message.append("📰 ").append(article.getTitle()).append("\n\n");
+                if (article.getDescription() != null && !article.getDescription().isEmpty()) {
+                    message.append(article.getDescription()).append("\n\n");
+                }
+                message.append("🔗 ").append(article.getLink()).append("\n");
+                message.append("📅 Source: ").append(article.getSource()).append("\n");
+                message.append("⭐ Score: ").append(String.format("%.2f", scored.getScore()));
+
+                notification.setMessage(message.toString());
+                notification.setStatus(Notification.NotificationStatus.PENDING);
+
+                // Save notification to get ID for reaction buttons
+                notification = notificationRepository.save(notification);
+
+                // Send via Telegram with reaction buttons
+                try {
+                    String token = getToken();
+                    if (token != null) {
+                        String url = "https://api.telegram.org/bot" + token + "/sendMessage";
+                        
+                        // Build inline keyboard with reaction buttons
+                        List<Map<String, String>> row = new ArrayList<>();
+                        row.add(Map.of("text", "👍 Like", "callback_data", "reaction_like_" + notification.getId()));
+                        row.add(Map.of("text", "👎 Dislike", "callback_data", "reaction_dislike_" + notification.getId()));
+                        
+                        List<List<Map<String, String>>> keyboard = new ArrayList<>();
+                        keyboard.add(row);
+                        
+                        Map<String, Object> inlineKeyboard = new HashMap<>();
+                        inlineKeyboard.put("inline_keyboard", keyboard);
+                        
+                        Map<String, Object> body = new HashMap<>();
+                        body.put("chat_id", chatId);
+                        body.put("text", message.toString());
+                        body.put("reply_markup", inlineKeyboard);
+                        
+                        HttpHeaders headers = new HttpHeaders();
+                        headers.setContentType(MediaType.APPLICATION_JSON);
+                        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+                        
+                        ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+                        
+                        if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> result = (Map<String, Object>) response.getBody().get("result");
+                            if (result != null && result.get("message_id") != null) {
+                                Long messageId = ((Number) result.get("message_id")).longValue();
+                                notification.setTelegramMessageId(messageId);
+                            }
+                        }
+                        
+                        notification.setStatus(Notification.NotificationStatus.SENT);
+                        notification.setSentAt(java.time.LocalDateTime.now());
+                        notificationRepository.save(notification);
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed to send recommendation: {}", e.getMessage());
+                    notification.setStatus(Notification.NotificationStatus.FAILED);
+                    notificationRepository.save(notification);
+                }
+            }
+
+        } catch (Exception e) {
+            logger.error("Error handling /recommend for chatId={}", chatId, e);
+            sendTelegramMessage(chatId, "❌ Failed to get recommendations. Please try again later.");
         }
     }
     
