@@ -6,44 +6,46 @@
     <title>Notified - Admin Dashboard</title>
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.244.0/dist/lucide.min.js"></script>
 </head>
 <body>
     <div class="dashboard">
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <h1>🔔 Notified</h1>
+                <img src="assets/circle_notified.png" alt="Notified" class="logo-img">
+                <h1>Notified</h1>
                 <span class="badge">Admin</span>
             </div>
             <nav class="sidebar-nav">
                 <a href="#" class="nav-item active" data-section="overview">
-                    <span class="nav-icon">📊</span>
+                    <i data-lucide="bar-chart-2" class="nav-icon"></i>
                     <span>Overview</span>
                 </a>
                 <a href="#" class="nav-item" data-section="users">
-                    <span class="nav-icon">👥</span>
+                    <i data-lucide="users" class="nav-icon"></i>
                     <span>Users</span>
                 </a>
                 <a href="#" class="nav-item" data-section="notifications">
-                    <span class="nav-icon">📨</span>
+                    <i data-lucide="mail" class="nav-icon"></i>
                     <span>Notifications</span>
                 </a>
                 <a href="#" class="nav-item" data-section="broadcast">
-                    <span class="nav-icon">📢</span>
+                    <i data-lucide="megaphone" class="nav-icon"></i>
                     <span>Broadcast</span>
                 </a>
                 <a href="#" class="nav-item" data-section="scraper">
-                    <span class="nav-icon">🔄</span>
+                    <i data-lucide="refresh-cw" class="nav-icon"></i>
                     <span>Scraper</span>
                 </a>
                 <a href="#" class="nav-item" data-section="activity">
-                    <span class="nav-icon">📜</span>
+                    <i data-lucide="file-text" class="nav-icon"></i>
                     <span>Activity Log</span>
                 </a>
             </nav>
             <div class="sidebar-footer">
                 <button class="refresh-btn" onclick="refreshAllData()">
-                    🔄 Refresh Data
+                    <i data-lucide="refresh-cw"></i> Refresh Data
                 </button>
                 <p class="last-updated">Last updated: <span id="last-updated">Never</span></p>
             </div>
@@ -70,28 +72,28 @@
                 <!-- Stats Cards -->
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-icon">👥</div>
+                        <div class="stat-icon"><i data-lucide="users"></i></div>
                         <div class="stat-info">
                             <h3 id="total-users">-</h3>
                             <p>Total Users</p>
                         </div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon">📨</div>
+                        <div class="stat-icon"><i data-lucide="mail"></i></div>
                         <div class="stat-info">
                             <h3 id="total-notifications">-</h3>
                             <p>Total Notifications</p>
                         </div>
                     </div>
                     <div class="stat-card success">
-                        <div class="stat-icon">✅</div>
+                        <div class="stat-icon"><i data-lucide="check-circle"></i></div>
                         <div class="stat-info">
                             <h3 id="sent-24h">-</h3>
                             <p>Sent (24h)</p>
                         </div>
                     </div>
                     <div class="stat-card info">
-                        <div class="stat-icon">📱</div>
+                        <div class="stat-icon"><i data-lucide="smartphone"></i></div>
                         <div class="stat-info">
                             <h3 id="telegram-users">-</h3>
                             <p>Telegram Users</p>
@@ -102,11 +104,11 @@
                 <!-- Charts Row -->
                 <div class="charts-row">
                     <div class="chart-card">
-                        <h3>📈 Notifications (Last 7 Days)</h3>
+                        <h3><i data-lucide="bar-chart-2" class="title-icon"></i> Notifications (Last 7 Days)</h3>
                         <canvas id="dailyChart"></canvas>
                     </div>
                     <div class="chart-card">
-                        <h3>📊 Category Distribution</h3>
+                        <h3><i data-lucide="pie-chart" class="title-icon"></i> Category Distribution</h3>
                         <canvas id="categoryChart"></canvas>
                     </div>
                 </div>
@@ -114,15 +116,15 @@
                 <!-- Additional Stats -->
                 <div class="charts-row">
                     <div class="chart-card small">
-                        <h3>👍 User Reactions</h3>
+                        <h3><i data-lucide="thumbs-up" class="title-icon"></i> User Reactions</h3>
                         <div class="reactions-stats">
                             <div class="reaction-item">
-                                <span class="reaction-icon">👍</span>
+                                <span class="reaction-icon"><i data-lucide="thumbs-up"></i></span>
                                 <span class="reaction-count" id="likes-count">-</span>
                                 <span class="reaction-label">Likes</span>
                             </div>
                             <div class="reaction-item">
-                                <span class="reaction-icon">👎</span>
+                                <span class="reaction-icon"><i data-lucide="thumbs-down"></i></span>
                                 <span class="reaction-count" id="dislikes-count">-</span>
                                 <span class="reaction-label">Dislikes</span>
                             </div>
@@ -133,7 +135,7 @@
                         <canvas id="frequencyChart"></canvas>
                     </div>
                     <div class="chart-card small">
-                        <h3>📡 Notification Channels</h3>
+                        <h3><i data-lucide="globe" class="title-icon"></i> Notification Channels</h3>
                         <canvas id="channelChart"></canvas>
                     </div>
                 </div>
@@ -142,7 +144,7 @@
             <!-- Users Section -->
             <section id="users-section" class="content-section">
                 <div class="section-header">
-                    <h3>👥 Registered Users</h3>
+                    <h3><i data-lucide="users" class="title-icon"></i> Registered Users</h3>
                     <div class="search-box">
                         <input type="text" id="user-search" placeholder="Search users..." onkeyup="filterUsers()">
                     </div>
@@ -169,32 +171,32 @@
             <!-- Notifications Section -->
             <section id="notifications-section" class="content-section">
                 <div class="section-header">
-                    <h3>📨 Notification Statistics</h3>
+                    <h3><i data-lucide="mail" class="title-icon"></i> Notification Statistics</h3>
                 </div>
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-icon">📊</div>
+                        <div class="stat-icon"><i data-lucide="bar-chart-2"></i></div>
                         <div class="stat-info">
                             <h3 id="notif-total">-</h3>
                             <p>Total Sent</p>
                         </div>
                     </div>
                     <div class="stat-card success">
-                        <div class="stat-icon">✅</div>
+                        <div class="stat-icon"><i data-lucide="check-circle"></i></div>
                         <div class="stat-info">
                             <h3 id="notif-success">-</h3>
                             <p>Successful</p>
                         </div>
                     </div>
                     <div class="stat-card warning">
-                        <div class="stat-icon">⏳</div>
+                        <div class="stat-icon"><i data-lucide="clock"></i></div>
                         <div class="stat-info">
                             <h3 id="notif-pending">-</h3>
                             <p>Pending</p>
                         </div>
                     </div>
                     <div class="stat-card danger">
-                        <div class="stat-icon">❌</div>
+                        <div class="stat-icon"><i data-lucide="x-circle"></i></div>
                         <div class="stat-info">
                             <h3 id="notif-failed">-</h3>
                             <p>Failed</p>
@@ -202,7 +204,7 @@
                     </div>
                 </div>
                 <div class="chart-card" style="margin-top: 20px;">
-                    <h3>📉 Status Breakdown</h3>
+                    <h3><i data-lucide="bar-chart" class="title-icon"></i> Status Breakdown</h3>
                     <canvas id="statusChart"></canvas>
                 </div>
             </section>
@@ -210,27 +212,27 @@
             <!-- Scraper Section -->
             <section id="scraper-section" class="content-section">
                 <div class="section-header">
-                    <h3>🔄 News Scraper Status</h3>
+                    <h3><i data-lucide="refresh-cw" class="title-icon"></i> News Scraper Status</h3>
                     <button class="btn btn-primary" onclick="triggerScraping(this)">
-                        ▶️ Trigger Scraping
+                        <i data-lucide="play"></i> Trigger Scraping
                     </button>
                 </div>
                 <div class="scraper-info">
                     <div class="info-card">
-                        <h4>⏱️ Scraping Interval</h4>
+                        <h4><i data-lucide="clock" class="small-icon"></i> Scraping Interval</h4>
                         <p>Every 30 minutes</p>
                     </div>
                     <div class="info-card">
-                        <h4>🗑️ Retention Period</h4>
+                        <h4><i data-lucide="trash" class="small-icon"></i> Retention Period</h4>
                         <p>3 days</p>
                     </div>
                     <div class="info-card">
-                        <h4>📂 Categories</h4>
+                        <h4><i data-lucide="folder" class="small-icon"></i> Categories</h4>
                         <p id="scraper-categories">Loading...</p>
                     </div>
                 </div>
                 <div class="chart-card" style="margin-top: 20px;">
-                    <h3>📰 Articles per Category</h3>
+                    <h3><i data-lucide="list" class="title-icon"></i> Articles per Category</h3>
                     <div id="category-counts" class="category-counts-grid">
                         <p>Loading...</p>
                     </div>
@@ -240,22 +242,22 @@
             <!-- Broadcast Section -->
             <section id="broadcast-section" class="content-section">
                 <div class="section-header">
-                    <h3>📢 Admin Broadcast</h3>
+                    <h3><i data-lucide="megaphone" class="title-icon"></i> Admin Broadcast</h3>
                 </div>
                 <div class="broadcast-container">
                     <div class="broadcast-form">
                         <div class="form-group">
                             <label for="broadcast-type">Broadcast Type</label>
                             <select id="broadcast-type" onchange="toggleUserSelection()">
-                                <option value="all">📣 Broadcast to All Users</option>
-                                <option value="selected">👥 Send to Selected Users</option>
+                                <option value="all">Broadcast to All Users</option>
+                                <option value="selected">Send to Selected Users</option>
                             </select>
                         </div>
                         
                         <div id="user-selection-container" class="form-group" style="display: none;">
                             <label>Select Users</label>
                             <div class="user-search-box">
-                                <input type="text" id="broadcast-user-search" placeholder="🔍 Search users by name, email..." oninput="filterBroadcastUsers()" autocomplete="off">
+                                <input type="text" id="broadcast-user-search" placeholder="Search users by name, email..." oninput="filterBroadcastUsers()" autocomplete="off">
                                 <button type="button" class="btn btn-secondary btn-small" onclick="selectAllFilteredUsers()">Select/Deselect All</button>
                             </div>
                             <div class="user-selection-list" id="user-selection-list">
@@ -274,12 +276,12 @@
                         </div>
                         
                         <div class="broadcast-info">
-                            <p>📧 Email: Will be sent to users with email enabled</p>
-                            <p>📱 Telegram: Will be sent to users with Telegram connected</p>
+                            <p><i data-lucide="mail"></i> Email: Will be sent to users with email enabled</p>
+                            <p><i data-lucide="smartphone"></i> Telegram: Will be sent to users with Telegram connected</p>
                         </div>
                         
                         <button class="btn btn-primary btn-large" onclick="sendBroadcast(this)">
-                            📤 Send Broadcast
+                            <i data-lucide="send"></i> Send Broadcast
                         </button>
                     </div>
                     
@@ -309,6 +311,6 @@
         </main>
     </div>
 
-    <script src="js/admin.js"></script>
+        <script src="js/admin.clean.js"></script>
 </body>
 </html>
