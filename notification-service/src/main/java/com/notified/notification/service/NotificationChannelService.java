@@ -31,7 +31,7 @@ public class NotificationChannelService {
     private static final Logger logger = LoggerFactory.getLogger(NotificationChannelService.class);
 
     private final JavaMailSender mailSender;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     @Value("${twilio.account-sid:}")
     private String twilioAccountSid;
     @Value("${twilio.auth-token:}")
@@ -42,9 +42,10 @@ public class NotificationChannelService {
     @Value("${telegram.bot-token:}")
     private String telegramBotToken;
 
-    public NotificationChannelService(JavaMailSender mailSender) {
+    public NotificationChannelService(JavaMailSender mailSender, RestTemplate restTemplate) {
         // Fail fast if mail sender bean is not present (should be provided by spring-boot-starter-mail)
         this.mailSender = mailSender;
+        this.restTemplate = restTemplate;
     }
 
     public void sendEmailNotification(UserPreference preference, Notification notification) {

@@ -30,7 +30,7 @@ public class TelegramBotService {
     @Value("${telegram.bot-token:}")
     private String telegramBotToken;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     private final UserPreferenceClient preferenceClient;
     private final NotificationRepository notificationRepository;
     private final NewsArticleService newsArticleService;
@@ -68,11 +68,13 @@ public class TelegramBotService {
     public TelegramBotService(UserPreferenceClient preferenceClient, 
                               NotificationRepository notificationRepository,
                               NewsArticleService newsArticleService,
-                              RecommenderService recommenderService) {
+                              RecommenderService recommenderService,
+                              RestTemplate restTemplate) {
         this.preferenceClient = preferenceClient;
         this.notificationRepository = notificationRepository;
         this.newsArticleService = newsArticleService;
         this.recommenderService = recommenderService;
+        this.restTemplate = restTemplate;
     }
     
     /**

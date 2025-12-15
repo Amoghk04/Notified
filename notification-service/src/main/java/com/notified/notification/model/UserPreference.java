@@ -12,6 +12,7 @@ public class UserPreference {
     private String email;
     private String phoneNumber;
     private String telegramChatId;
+    private String telegramUsername;
     private Set<NotificationChannel> enabledChannels;
     private String preference;
     private List<String> preferences = new ArrayList<>();
@@ -65,6 +66,14 @@ public class UserPreference {
 
     public void setTelegramChatId(String telegramChatId) {
         this.telegramChatId = telegramChatId;
+    }
+
+    public String getTelegramUsername() {
+        return telegramUsername;
+    }
+
+    public void setTelegramUsername(String telegramUsername) {
+        this.telegramUsername = telegramUsername;
     }
 
     public Set<NotificationChannel> getEnabledChannels() {

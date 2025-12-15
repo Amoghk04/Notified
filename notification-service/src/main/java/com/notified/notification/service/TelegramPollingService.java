@@ -26,13 +26,14 @@ public class TelegramPollingService {
     private boolean pollingEnabled;
 
     private final TelegramBotService telegramBotService;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     
     private volatile boolean running = false;
     private long lastUpdateId = 0;
 
-    public TelegramPollingService(TelegramBotService telegramBotService) {
+    public TelegramPollingService(TelegramBotService telegramBotService, RestTemplate restTemplate) {
         this.telegramBotService = telegramBotService;
+        this.restTemplate = restTemplate;
     }
 
     @EventListener(ApplicationReadyEvent.class)

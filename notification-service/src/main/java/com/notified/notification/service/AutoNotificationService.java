@@ -7,6 +7,7 @@ import com.notified.notification.model.UserPreference;
 import com.notified.notification.repository.NotificationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -31,22 +32,33 @@ public class AutoNotificationService {
     private final NewsArticleService newsArticleService;
     private final NotificationRepository notificationRepository;
     private final NotificationChannelService channelService;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+
+    // Only the primary instance should run scheduled notifications to prevent duplicates
+    @Value("${notification.scheduler.enabled:true}")
+    private boolean schedulerEnabled;
 
     public AutoNotificationService(UserPreferenceClient preferenceClient, 
                                    NotificationService notificationService,
                                    NewsArticleService newsArticleService,
                                    NotificationRepository notificationRepository,
-                                   NotificationChannelService channelService) {
+                                   NotificationChannelService channelService,
+                                   RestTemplate restTemplate) {
         this.preferenceClient = preferenceClient;
         this.notificationService = notificationService;
         this.newsArticleService = newsArticleService;
         this.notificationRepository = notificationRepository;
         this.channelService = channelService;
+        this.restTemplate = restTemplate;
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void sendInitialNotifications() {
+        if (!schedulerEnabled) {
+            logger.info("🔕 Notification scheduler disabled on this instance (replica mode)");
+            return;
+        }
+        
         logger.info("🚀 Application ready - Will check and send notifications based on user preferences...");
         
         // Small delay to ensure all services are fully initialized
@@ -68,12 +80,18 @@ public class AutoNotificationService {
         
         // If never sent, user is due
         if (lastSent == null) {
+            logger.debug("User {} has never received notifications, marking as due", pref.getUserId());
             return true;
         }
         
         // Check if enough time has passed
         long minutesSinceLastNotification = ChronoUnit.MINUTES.between(lastSent, LocalDateTime.now());
-        return minutesSinceLastNotification >= intervalMinutes;
+        boolean isDue = minutesSinceLastNotification >= intervalMinutes;
+        
+        logger.debug("User {} - lastSent: {}, interval: {} mins, minutesSince: {}, isDue: {}", 
+            pref.getUserId(), lastSent, intervalMinutes, minutesSinceLastNotification, isDue);
+        
+        return isDue;
     }
 
     /**
@@ -81,7 +99,8 @@ public class AutoNotificationService {
      */
     private void updateLastNotificationSent(UserPreference pref) {
         try {
-            pref.setLastNotificationSent(LocalDateTime.now());
+            LocalDateTime now = LocalDateTime.now();
+            pref.setLastNotificationSent(now);
             
             String apiUrl = "http://localhost:8081/preferences/" + pref.getUserId();
             HttpHeaders headers = new HttpHeaders();
@@ -89,9 +108,9 @@ public class AutoNotificationService {
             HttpEntity<UserPreference> entity = new HttpEntity<>(pref, headers);
             
             restTemplate.exchange(apiUrl, HttpMethod.PUT, entity, UserPreference.class);
-            logger.debug("Updated lastNotificationSent for user: {}", pref.getUserId());
+            logger.info("✅ Updated lastNotificationSent for user: {} to {}", pref.getUserId(), now);
         } catch (Exception e) {
-            logger.warn("Failed to update lastNotificationSent for user: {} - {}", pref.getUserId(), e.getMessage());
+            logger.error("❌ Failed to update lastNotificationSent for user: {} - {}", pref.getUserId(), e.getMessage(), e);
         }
     }
 
@@ -277,9 +296,13 @@ public class AutoNotificationService {
     /**
      * Scheduled task that checks every minute for users who are due for notifications.
      * Each user will receive notifications based on their individual interval settings.
+     * Only runs on the primary instance (schedulerEnabled=true) to prevent duplicate notifications.
      */
     @Scheduled(fixedRate = 60000)  // Check every 60 seconds
     public void scheduledNotifications() {
+        if (!schedulerEnabled) {
+            return; // Skip on replica instances
+        }
         logger.debug("⏰ Scheduled check - looking for users due for notifications...");
         sendNotificationsToEligibleUsers();
     }
